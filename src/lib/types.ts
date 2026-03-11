@@ -59,4 +59,10 @@ export type ProblemType =
   | "heat-exchanger"
   | "lid-driven-cavity"
   | "backward-facing-step"
+  | "conduction"
+  | "radiation"
+  | "fin-heat-transfer"
+  | "porous-media"
+  | "boiling-condensation"
+  | "compressible-flow"
   | "unknown";

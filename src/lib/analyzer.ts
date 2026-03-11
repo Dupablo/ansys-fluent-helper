@@ -52,6 +52,66 @@ const PROBLEM_KEYWORDS: Record<Exclude<ProblemType, "unknown">, string[]> = {
     "sudden expansion", "step flow", "reattachment", "recirculation zone",
     "expansion ratio", "step height", "separated flow",
   ],
+  "conduction": [
+    "conduction", "heat conduction", "thermal conduction", "solid conduction",
+    "fourier", "fourier's law", "thermal conductivity", "composite wall",
+    "multilayer", "multi-layer", "insulation", "steady conduction",
+    "transient conduction", "lumped capacitance", "biot number",
+    "thermal resistance", "contact resistance", "heat generation",
+    "temperature distribution", "1d conduction", "2d conduction", "3d conduction",
+    "radial conduction", "spherical conduction", "cylindrical conduction",
+  ],
+  "radiation": [
+    "radiation", "radiative", "radiative heat transfer", "thermal radiation",
+    "emissivity", "absorptivity", "stefan-boltzmann", "stefan boltzmann",
+    "view factor", "shape factor", "configuration factor",
+    "blackbody", "black body", "gray body", "grey body",
+    "surface to surface", "surface-to-surface", "s2s",
+    "discrete ordinates", "do model", "p1 model", "p-1",
+    "participating media", "absorption coefficient", "scattering",
+    "enclosure radiation", "radiosity", "irradiation",
+    "optically thick", "optically thin",
+  ],
+  "fin-heat-transfer": [
+    "fin", "fins", "extended surface", "extended surfaces",
+    "fin efficiency", "fin effectiveness", "fin array",
+    "rectangular fin", "annular fin", "pin fin", "spine",
+    "fin tip", "fin base", "fin length", "fin thickness",
+    "heat sink", "finned surface", "finned tube",
+    "cylindrical fin", "tapered fin", "triangular fin",
+    "fin performance", "fin parameter",
+  ],
+  "porous-media": [
+    "porous", "porous media", "porous medium", "porous zone",
+    "packed bed", "packed column", "porous plate",
+    "permeability", "porosity", "darcy", "forchheimer",
+    "darcy-forchheimer", "inertial resistance", "viscous resistance",
+    "filter", "filtration", "catalytic converter", "catalyst bed",
+    "porous baffle", "porous jump", "pebble bed",
+    "superficial velocity", "interstitial velocity",
+    "ergun equation", "kozeny-carman",
+  ],
+  "boiling-condensation": [
+    "boiling", "condensation", "phase change", "two-phase",
+    "two phase", "evaporation", "vaporization",
+    "nucleate boiling", "film boiling", "pool boiling", "flow boiling",
+    "film condensation", "dropwise condensation",
+    "melting", "solidification", "freezing",
+    "latent heat", "heat of vaporization", "saturation temperature",
+    "vapor", "vapour", "bubble", "void fraction",
+    "volume of fluid", "vof", "lee model", "mixture model",
+    "multiphase", "liquid-vapor", "liquid-vapour",
+  ],
+  "compressible-flow": [
+    "compressible", "compressible flow", "supersonic", "transonic",
+    "mach number", "mach", "shock", "shock wave", "shock tube",
+    "nozzle", "converging-diverging", "convergent-divergent", "de laval",
+    "choked flow", "critical pressure", "isentropic",
+    "normal shock", "oblique shock", "expansion fan",
+    "prandtl-meyer", "fanno flow", "rayleigh flow",
+    "density-based", "density based solver",
+    "jet", "supersonic jet", "underexpanded", "overexpanded",
+  ],
 };
 
 const PROBLEM_LABELS: Record<Exclude<ProblemType, "unknown">, string> = {
@@ -63,6 +123,12 @@ const PROBLEM_LABELS: Record<Exclude<ProblemType, "unknown">, string> = {
   "heat-exchanger": "Heat Exchanger Analysis",
   "lid-driven-cavity": "Lid-Driven Cavity Flow",
   "backward-facing-step": "Backward-Facing Step Flow",
+  "conduction": "Heat Conduction",
+  "radiation": "Radiation Heat Transfer",
+  "fin-heat-transfer": "Fin & Extended Surface Heat Transfer",
+  "porous-media": "Porous Media Flow",
+  "boiling-condensation": "Boiling & Condensation (Phase Change)",
+  "compressible-flow": "Compressible / Supersonic Flow",
 };
 
 interface DetectionResult {
@@ -1507,6 +1573,1771 @@ function templateBackwardFacingStep(text: string): WorkflowSection[] {
   ];
 }
 
+function templateConduction(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const lower = text.toLowerCase();
+  const isComposite = lower.includes("composite") || lower.includes("multilayer") || lower.includes("multi-layer") || lower.includes("layered");
+  const is2D = lower.includes("2d") || lower.includes("2-d") || lower.includes("two-dimensional");
+  const is3D = lower.includes("3d") || lower.includes("3-d") || lower.includes("three-dimensional");
+  const hasGeneration = lower.includes("heat generation") || lower.includes("heat source") || lower.includes("internal generation");
+  const isCylindrical = lower.includes("cylinder") || lower.includes("cylindrical") || lower.includes("radial");
+  const isSpherical = lower.includes("sphere") || lower.includes("spherical");
+  const geometry = isSpherical ? "spherical" : isCylindrical ? "cylindrical" : "planar";
+
+  return [
+    sec("Problem Summary", `Pure heat conduction in a ${geometry} solid — ${isComposite ? "composite/multilayer, " : ""}${hasGeneration ? "with internal heat generation, " : ""}${transient ? "transient" : "steady-state"}${is2D ? ", 2D" : is3D ? ", 3D" : ""}.`),
+
+    sec("Governing Physics", [
+      "Heat conduction in solids governed by Fourier's law and the heat equation:",
+      `- Steady-state: ∇·(k∇T)${hasGeneration ? " + q̇ₘₑₙ" : ""} = 0`,
+      transient ? `- Transient: ρcₚ ∂T/∂t = ∇·(k∇T)${hasGeneration ? " + q̇ₘₑₙ" : ""}` : "",
+      "",
+      isCylindrical ? "- Cylindrical coordinates: (1/r)∂/∂r(kr ∂T/∂r) for radial conduction" : "",
+      isSpherical ? "- Spherical coordinates: (1/r²)∂/∂r(kr² ∂T/∂r) for radial conduction" : "",
+      isComposite ? "- Thermal resistance in series: R_total = ΣR_i = Σ(L_i / k_i A) for planar walls" : "",
+      "- Key parameters: thermal conductivity (k), Biot number (Bi = hL/k) for convection BCs",
+      transient ? "- Fourier number: Fo = αt/L² (dimensionless time)" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      "- No fluid flow — pure conduction problem",
+      isComposite ? "- Perfect thermal contact between layers (no contact resistance, unless specified)" : "- Homogeneous solid material",
+      `- ${transient ? "Transient: uniform initial temperature distribution (unless specified)" : "Steady-state conditions"}`,
+      "- Constant thermal properties (unless temperature-dependent)",
+      hasGeneration ? "- Uniform volumetric heat generation (unless spatially varying)" : "",
+      "- No radiation (unless specified at surfaces)",
+    ].filter(Boolean).join("\n")),
+
+    sec("Required Inputs", [
+      "Before starting, gather:",
+      `- Geometry dimensions (${isCylindrical ? "inner/outer radius, length" : isSpherical ? "inner/outer radius" : "wall thickness, height, width"})`,
+      isComposite ? "- Layer thicknesses and individual material properties" : "- Solid material thermal properties (k, ρ, cₚ)",
+      "- Boundary conditions at each surface (temperature, heat flux, or convection h + T∞)",
+      hasGeneration ? "- Volumetric heat generation rate q̇ [W/m³]" : "",
+      transient ? "- Initial temperature distribution T(x,0)" : "",
+      transient ? "- Time duration of interest" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Material Properties", [
+      "Set solid material properties in Fluent:",
+      "",
+      "**Common solids:**",
+      "- Aluminum: k = 202 W/(m·K), ρ = 2719 kg/m³, cₚ = 871 J/(kg·K)",
+      "- Steel (AISI 1010): k = 63.9 W/(m·K), ρ = 7832 kg/m³, cₚ = 434 J/(kg·K)",
+      "- Copper: k = 387 W/(m·K), ρ = 8978 kg/m³, cₚ = 381 J/(kg·K)",
+      "- Brick: k = 0.72 W/(m·K), ρ = 1920 kg/m³, cₚ = 835 J/(kg·K)",
+      "- Glass wool insulation: k = 0.038 W/(m·K), ρ = 32 kg/m³, cₚ = 835 J/(kg·K)",
+      "",
+      isComposite ? "For composite walls, create a separate material for each layer." : "",
+      "If temperature-dependent k is needed, use piecewise-linear or polynomial input.",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Materials → Solid → Create/Edit",
+        "Materials → Solid → Properties → Thermal Conductivity",
+      ],
+    }),
+
+    sec("Geometry Guidance", [
+      `**${geometry.charAt(0).toUpperCase() + geometry.slice(1)} conduction geometry:**`,
+      "",
+      isCylindrical ? [
+        "- 2D axisymmetric: model cross-section (rectangle with r_inner to r_outer on x-axis, length on y-axis)",
+        "- Bottom edge = axis of symmetry",
+        isComposite ? "- Create separate regions for each cylindrical layer" : "",
+      ].filter(Boolean).join("\n") : isSpherical ? [
+        "- 2D axisymmetric: model as a wedge/sector from r_inner to r_outer",
+        "- Use axisymmetric with angular span",
+        isComposite ? "- Create concentric shells for each layer" : "",
+      ].filter(Boolean).join("\n") : [
+        "- 1D/2D: create a rectangle with thickness in x-direction",
+        isComposite ? "- Stack rectangles for each layer, sharing edges at interfaces" : "",
+        is2D ? "- Include full 2D cross-section for multi-dimensional effects" : "",
+      ].filter(Boolean).join("\n"),
+      "",
+      "Ensure geometry is clean with shared edges at material interfaces for conformal meshing.",
+    ].join("\n"), {
+      tips: [
+        "For 1D conduction, a simple rectangle is sufficient — mesh only in the thickness direction",
+        isComposite ? "Use Named Selections for each layer's cell zone for easy material assignment" : "",
+      ].filter(Boolean),
+    }),
+
+    sec("Meshing Guidance", [
+      "**Structured mesh recommended for conduction problems:**",
+      `- Through-thickness: ${isComposite ? "at least 10-20 cells per layer" : "at least 20-40 cells"}`,
+      "- Use bias/inflation near surfaces with convection BCs (gradient is steepest there)",
+      "- Growth ratio: 1.05-1.1",
+      "",
+      isComposite ? "- Ensure conformal mesh at material interfaces (shared topology)" : "",
+      transient ? "- Finer mesh needed for transient problems to resolve thermal waves" : "",
+      "",
+      `**Total cells:** ${is3D ? "50,000-500,000" : "500-10,000 (2D), much fewer for 1D"}`,
+      "",
+      "**Quality:**",
+      "- Orthogonal quality > 0.9 (easy for structured mesh)",
+      "- Conduction-only problems are very mesh-forgiving — coarser meshes work well",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Mesh → Check"],
+      tips: ["Conduction problems converge easily even on coarse meshes — start coarse and refine if needed"],
+    }),
+
+    sec("Solver Setup", [
+      "**General Settings:**",
+      "- Solver Type: Pressure-Based (even for solid-only — Fluent requires it)",
+      `- Time: ${transient ? "Transient" : "Steady"}`,
+      "",
+      "**Models:**",
+      "- Energy: ON (mandatory)",
+      "- Viscous: OFF / Laminar (no flow equations solved)",
+      "",
+      "**Cell Zone Conditions:**",
+      "- Set ALL zones as Solid",
+      "- Assign correct material to each zone",
+      hasGeneration ? "- Source Terms → Energy → specify volumetric heat generation [W/m³]" : "",
+      "",
+      "**IMPORTANT:** Since there is no fluid flow, you may suppress the flow equations:",
+      "- In Solution → Controls: set flow Courant number to 0 or disable momentum equations",
+      "- Or simply accept that Fluent will solve trivial flow equations (they converge instantly)",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Models → Energy → ON",
+        "Setup → Cell Zone Conditions → [zone] → Type: Solid",
+        ...(hasGeneration ? ["Setup → Cell Zone Conditions → [zone] → Source Terms → Energy"] : []),
+      ],
+      warnings: ["All cell zones MUST be set to Solid — if left as Fluid, Fluent will try to solve Navier-Stokes"],
+    }),
+
+    sec("Boundary Conditions", [
+      "Set thermal boundary conditions on each surface:",
+      "",
+      "**Option 1 — Constant Temperature (Dirichlet):**",
+      "- Wall → Thermal → Temperature → specify T [K or °C]",
+      "",
+      "**Option 2 — Constant Heat Flux (Neumann):**",
+      "- Wall → Thermal → Heat Flux → specify q″ [W/m²]",
+      "- Use q″ = 0 for adiabatic (insulated) surfaces",
+      "",
+      "**Option 3 — Convection:**",
+      "- Wall → Thermal → Convection",
+      "- Heat Transfer Coefficient: h [W/(m²·K)]",
+      "- Free Stream Temperature: T∞ [K]",
+      "",
+      isCylindrical ? "**Axis:** Set bottom edge (r = 0) as Axis boundary for axisymmetric" : "",
+      isComposite ? "**Material interfaces:** Should be coupled walls (automatic if mesh is conformal)" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Boundary Conditions → Wall → Thermal",
+        "Setup → Boundary Conditions → Wall → Thermal → Convection",
+      ],
+      tips: ["For insulated surfaces, set heat flux = 0 W/m² explicitly to be safe"],
+    }),
+
+    sec("Solution Methods", [
+      "Conduction problems are simple and converge quickly:",
+      "",
+      "**Scheme:** SIMPLE (default is fine)",
+      "**Energy:** Second Order Upwind (or even First Order is adequate for conduction)",
+      "",
+      transient ? [
+        "**Transient Formulation:** Second Order Implicit",
+        "",
+        "**Time Stepping:**",
+        "- Estimate thermal diffusion time scale: t_d = L²/α where α = k/(ρcₚ)",
+        "- Time step: Δt = t_d / 50 to t_d / 200",
+        "- Total simulation time: 3-5 × t_d to reach steady state",
+        "- Max Iterations per Time Step: 10-20 (usually converges in < 5)",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Solution → Methods"],
+    }),
+
+    sec("Initialization & Solution Strategy", [
+      transient
+        ? [
+            "**Initial Condition:** Set T = T_initial throughout the domain",
+            "- Standard Initialization → Temperature = T_initial",
+            "",
+            "**Run Calculation:**",
+            "- Number of Time Steps: enough to cover the time range of interest",
+            "- Monitor temperature at key locations vs. time",
+          ].join("\n")
+        : [
+            "**Hybrid Initialization** (or set T to average of boundary temperatures)",
+            "",
+            "**Run Calculation:**",
+            "- Iterations: 100-500 (conduction converges very fast)",
+            "- Energy residual target: < 1×10⁻⁶",
+          ].join("\n"),
+      "",
+      "**Under-Relaxation:** Energy = 1.0 (no need to reduce for pure conduction)",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Solution → Initialization",
+        "Solution → Run Calculation",
+      ],
+      tips: ["Pure conduction problems typically converge in 50-200 iterations — if not, check boundary conditions"],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Temperature distribution through the solid",
+      isComposite ? "- Note temperature jumps at material interfaces (if contact resistance) or continuous T (if perfect contact)" : "",
+      "",
+      "**XY Plots:**",
+      `- Temperature vs. ${isCylindrical ? "radial position" : isSpherical ? "radial position" : "x-position (through thickness)"}`,
+      transient ? "- Temperature at specific points vs. time" : "",
+      isComposite ? "- Temperature profile showing different slopes in each material layer" : "",
+      "",
+      "**Key Results to Report:**",
+      "- Heat flux through the solid (Reports → Surface Integrals → Heat Flux)",
+      isComposite ? "- Overall thermal resistance: R_total = ΔT / q″" : "",
+      "- Maximum and minimum temperatures",
+      `- Compare with analytical: ${isCylindrical ? "T(r) = T₁ - (T₁-T₂)ln(r/r₁)/ln(r₂/r₁) for cylindrical" : isSpherical ? "T(r) = T₁ - (T₁-T₂)(1/r₁ - 1/r)/(1/r₁ - 1/r₂) for spherical" : "T(x) = T₁ + (T₂-T₁)(x/L) for planar without generation"}`,
+      hasGeneration ? "- With generation: T_max at center = T_surface + q̇L²/(2k) for planar wall" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours → Temperature",
+        "Results → Plots → XY Plot",
+        "Results → Reports → Surface Integrals → Heat Flux",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "Verify results against analytical solutions:",
+      "",
+      "- **Energy conservation:** heat in = heat out (check Reports → Fluxes on all boundaries)",
+      "- **Temperature range:** all temperatures must lie between boundary temperature extremes" + (hasGeneration ? " (with generation, max T can exceed boundary T)" : ""),
+      `- **Linear/logarithmic profile:** ${isCylindrical ? "T should vary logarithmically with r" : isSpherical ? "T should vary as 1/r" : "T should vary linearly with x (no generation)"}`,
+      isComposite ? "- **Slope change at interfaces:** dT/dx should change proportional to 1/k at each material boundary" : "",
+      "- **Heat flux consistency:** q″ should be constant through all layers in steady 1D conduction",
+      transient ? "- **Biot number check:** if Bi < 0.1, lumped capacitance applies — compare with T(t) = T∞ + (Tᵢ - T∞)exp(-t/τ)" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Fluxes"],
+      warnings: ["If energy imbalance > 0.1%, the solution is not converged — run more iterations or refine mesh"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**Zone not set as solid:**",
+      "- If zone is fluid, Fluent solves flow equations unnecessarily — set Cell Zone to Solid",
+      "",
+      "**Incorrect thermal conductivity:**",
+      "- Double-check units: W/(m·K). Common mistake is using BTU values with SI geometry.",
+      "",
+      isComposite ? [
+        "**Interface not coupled:**",
+        "- If layers have separate meshes, create an interface pair",
+        "- For conformal meshes, the coupling is automatic",
+        "",
+      ].join("\n") : "",
+      "**Wrong boundary condition type:**",
+      "- Ensure adiabatic surfaces have heat flux = 0, not some default value",
+      "- For convection BC: h = 0 means insulated, not 'default'",
+      "",
+      transient ? [
+        "**Time step too large:**",
+        "- Temperature oscillations indicate Δt is too large",
+        "- Reduce Δt to Fo < 0.5 per time step (Fo = αΔt/Δx²)",
+      ].join("\n") : "",
+      "**Convergence issues (rare for conduction):**",
+      "- If it doesn't converge in ~100 iterations, something is fundamentally wrong with setup",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "Pure conduction is the easiest CFD problem — if it's not converging, recheck zone types and BCs",
+        "Save a case file with just the thermal setup before running — easy to restart if needed",
+      ],
+    }),
+  ];
+}
+
+function templateRadiation(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const lower = text.toLowerCase();
+  const isS2S = lower.includes("s2s") || lower.includes("surface to surface") || lower.includes("surface-to-surface");
+  const isDO = lower.includes("discrete ordinates") || lower.includes("do model");
+  const isP1 = lower.includes("p1") || lower.includes("p-1");
+  const isParticipating = lower.includes("participating") || lower.includes("absorption") || lower.includes("scattering") || lower.includes("optically");
+  const isEnclosure = lower.includes("enclosure") || lower.includes("cavity") || lower.includes("furnace");
+
+  const radModel = isS2S ? "S2S (Surface-to-Surface)" : isDO ? "DO (Discrete Ordinates)" : isP1 ? "P-1" : isParticipating ? "DO (Discrete Ordinates) — required for participating media" : "S2S (Surface-to-Surface) — default for surface radiation";
+
+  return [
+    sec("Problem Summary", `Radiation heat transfer — ${isParticipating ? "participating media" : "surface-to-surface"} radiation${isEnclosure ? " in an enclosure" : ""}${transient ? ", transient" : ", steady-state"}. Model: ${radModel}.`),
+
+    sec("Governing Physics", [
+      "Thermal radiation governed by:",
+      "- Stefan-Boltzmann law: q = εσT⁴ (surface emission)",
+      "- View factors: F_ij determines radiative exchange between surfaces",
+      isParticipating ? "- Radiative Transfer Equation (RTE): dI/ds = κIb - (κ + σs)I + (σs/4π)∫I dΩ" : "",
+      "",
+      "**Key parameters:**",
+      "- Emissivity (ε): 0 (reflective) to 1 (blackbody)",
+      "- Stefan-Boltzmann constant: σ = 5.67×10⁻⁸ W/(m²·K⁴)",
+      isParticipating ? "- Absorption coefficient (κ): characterizes medium opacity" : "",
+      isParticipating ? "- Optical thickness: τ = κ·L (thin < 1, thick > 1)" : "",
+      "",
+      "Radiation becomes significant at high temperatures (T > ~500 K) or in vacuum/gas environments.",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      "- Surfaces are diffuse (emit/reflect uniformly in all directions)",
+      "- Gray surfaces (emissivity independent of wavelength) — unless band model specified",
+      isParticipating ? "- Participating medium (absorbing/emitting/scattering gas)" : "- Non-participating medium (transparent between surfaces)",
+      isEnclosure ? "- Enclosed geometry (all radiation accounted for by enclosure surfaces)" : "",
+      "- Emissivities are constant (not temperature-dependent, unless specified)",
+      transient ? "- Time-dependent surface temperatures or heat sources" : "- Steady-state radiation equilibrium",
+    ].filter(Boolean).join("\n"), {
+      warnings: [
+        "Radiation calculations involve T⁴ — even small temperature errors get amplified. Ensure unit consistency (Kelvin!).",
+        "Non-gray radiation (spectral dependence) requires DO model with band specification — much more complex.",
+      ],
+    }),
+
+    sec("Required Inputs", [
+      "- Surface emissivities for all participating surfaces",
+      "- Surface temperatures or heat flux boundary conditions",
+      "- Geometry of the enclosure / surfaces",
+      isParticipating ? "- Absorption coefficient of the medium (constant or WSGGM for combustion gases)" : "",
+      isParticipating ? "- Scattering coefficient (if applicable)" : "",
+      "- Decide if radiation is the only mode or combined with convection/conduction",
+    ].filter(Boolean).join("\n")),
+
+    sec("Material Properties", [
+      "**Surface properties (set under Boundary Conditions → Wall):**",
+      "- Internal Emissivity: ε (0 to 1)",
+      "- Common values:",
+      "  - Oxidized steel: ε ≈ 0.8",
+      "  - Polished aluminum: ε ≈ 0.05",
+      "  - Black paint / soot: ε ≈ 0.95",
+      "  - Brick / ceramic: ε ≈ 0.9",
+      "  - Glass: ε ≈ 0.9 (opaque to IR)",
+      "",
+      isParticipating ? [
+        "**Medium properties (for participating media):**",
+        "- Absorption coefficient: κ [1/m]",
+        "- For combustion gases (CO₂, H₂O): use WSGGM (Weighted Sum of Gray Gases Model)",
+        "- Scattering coefficient: σs [1/m] (for particle-laden flows)",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Boundary Conditions → Wall → Radiation",
+        ...(isParticipating ? ["Materials → Fluid → Properties → Absorption Coefficient"] : []),
+      ],
+    }),
+
+    sec("Geometry Guidance", [
+      isEnclosure ? [
+        "**Enclosure geometry:**",
+        "- Model the complete enclosure — all surfaces must be accounted for",
+        "- S2S model requires a closed enclosure (all view factors sum to 1)",
+        "- Name each surface for easy emissivity/temperature assignment",
+      ].join("\n") : [
+        "**Open geometry with radiation:**",
+        "- Model radiating surfaces and any nearby objects",
+        "- Far-field boundaries can be set as blackbody at ambient temperature",
+      ].join("\n"),
+      "",
+      "**Symmetry:**",
+      "- Symmetry planes can be used if radiation is symmetric",
+      "- For S2S: symmetry boundaries are treated as perfectly reflecting (ε = 0)",
+    ].join("\n"), {
+      tips: [
+        "For S2S model, all surfaces participating in radiation must form a closed enclosure",
+        "Simplify geometry where possible — complex geometries increase view factor computation time dramatically",
+      ],
+    }),
+
+    sec("Meshing Guidance", [
+      "**Radiation problems are less mesh-sensitive than convection, but:**",
+      "- Surface mesh quality matters for view factor computation (S2S)",
+      "- Mesh faces on radiating surfaces should be of similar size for accurate view factors",
+      "- Avoid very elongated surface cells on radiating walls",
+      "",
+      isParticipating ? [
+        "**For participating media (DO model):**",
+        "- Volume mesh must resolve temperature gradients in the medium",
+        "- Optical thickness per cell: κ·Δx should be < 1 ideally",
+        "- Refine mesh where absorption/emission gradients are large",
+      ].join("\n") : "",
+      "",
+      "**Quality targets:** Orthogonal quality > 0.5, Skewness < 0.7",
+    ].filter(Boolean).join("\n")),
+
+    sec("Solver & Radiation Model Setup", [
+      "**General:** Pressure-Based, " + (transient ? "Transient" : "Steady"),
+      "",
+      "**Energy:** ON (mandatory for radiation)",
+      "",
+      "**Radiation Model Selection:**",
+      "",
+      isS2S || (!isDO && !isP1 && !isParticipating) ? [
+        "**S2S (Surface-to-Surface) — recommended for surface radiation:**",
+        "- Best for enclosed environments with non-participating media",
+        "- Computes view factors between surface clusters",
+        "- Setup: Radiation → S2S → Compute View Factors",
+        "- Clustering: use face-to-face method; increase clusters for accuracy",
+      ].join("\n") : "",
+      isDO || isParticipating ? [
+        "**DO (Discrete Ordinates) — required for participating media:**",
+        "- Solves RTE along discrete directions",
+        "- Theta/Phi Divisions: 2×2 minimum, 3×3 for accuracy, 5×5 for high accuracy",
+        "- Pixels: 1×1 to 3×3",
+        "- Enable non-gray model for spectral radiation (bands)",
+      ].join("\n") : "",
+      isP1 ? [
+        "**P-1 model — simplified participating media:**",
+        "- Faster but less accurate than DO",
+        "- Best for optically thick media (τ > 1)",
+        "- Not suitable for surface radiation problems",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Models → Radiation → S2S (or DO or P-1)",
+        ...(isS2S || (!isDO && !isP1 && !isParticipating) ? ["Setup → Models → Radiation → S2S → View Factors → Compute"] : []),
+        ...(isDO || isParticipating ? ["Setup → Models → Radiation → DO → Angular Discretization"] : []),
+      ],
+      warnings: [
+        "S2S requires view factor computation before running — can be slow for complex geometry",
+        "DO model with many directions (5×5) significantly increases computation time",
+      ],
+    }),
+
+    sec("Boundary Conditions", [
+      "**Radiating Walls:**",
+      "- Wall → Radiation → Internal Emissivity = ε",
+      "- Thermal condition: Temperature, Heat Flux, or Coupled",
+      "",
+      "**Non-radiating walls:**",
+      "- Internal Emissivity = 0 (perfectly reflecting)",
+      "- Or exclude from radiation participation",
+      "",
+      isEnclosure ? [
+        "**Enclosure walls:**",
+        "- Set each wall's emissivity and temperature/heat-flux",
+        "- Adiabatic radiating walls: set heat flux = 0 but ε > 0 (re-radiating surface)",
+      ].join("\n") : [
+        "**Open boundaries:**",
+        "- Pressure-Outlet or Inlet: set external blackbody temperature for radiation",
+      ].join("\n"),
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Boundary Conditions → Wall → Radiation → Internal Emissivity",
+      ],
+    }),
+
+    sec("Solution Methods", [
+      "**Scheme:** SIMPLE or Coupled",
+      "**Pressure:** Second Order",
+      "**Energy:** Second Order Upwind",
+      "",
+      "**Radiation-specific:**",
+      isS2S || (!isDO && !isP1) ? "- S2S: no additional transport equations — view factors pre-computed" : "",
+      isDO || isParticipating ? "- DO: solve radiation intensity equations every flow iteration (default) or every N iterations" : "",
+      isP1 ? "- P-1: one additional transport equation for incident radiation G" : "",
+      "",
+      "**Under-Relaxation:**",
+      "- Energy: 0.9-1.0",
+      isDO || isParticipating ? "- Discrete Ordinates: 0.8-1.0" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Solution → Methods", "Solution → Controls"],
+    }),
+
+    sec("Initialization & Solution Strategy", [
+      "**Initialize:** Set temperature to average of boundary temperatures",
+      "",
+      "**Strategy:**",
+      "1. Start with a good initial temperature guess (reduces radiation source term nonlinearity)",
+      "2. Run with lower under-relaxation for energy (0.8) initially",
+      "3. Radiation problems can be stiff due to T⁴ nonlinearity — converge slowly",
+      `4. ${transient ? "Time step: Δt based on thermal diffusion and radiation response time" : "Run 500-2000 iterations"}`,
+      "",
+      "**Convergence monitors:**",
+      "- Energy residual < 1×10⁻⁶",
+      "- Monitor heat flux on radiating surfaces",
+      "- Monitor temperature of re-radiating surfaces (should stabilize)",
+    ].join("\n"), {
+      fluentMenuPaths: ["Solution → Initialization", "Solution → Run Calculation"],
+      warnings: ["Radiation problems converge more slowly than pure conduction due to T⁴ nonlinearity — be patient"],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Temperature distribution",
+      "- Surface heat flux (total, radiative component)",
+      isParticipating ? "- Incident radiation (G)" : "",
+      isParticipating ? "- Absorption / emission contours" : "",
+      "",
+      "**Key Results:**",
+      "- Radiative heat flux on each surface: Reports → Surface Integrals → Radiation Heat Flux",
+      "- Net radiation heat transfer between surfaces",
+      "- Surface temperatures (for re-radiating surfaces)",
+      "",
+      "**Validation:**",
+      isEnclosure ? "- Compare with analytical view factor × σ(T₁⁴ - T₂⁴) calculations" : "",
+      "- Energy balance: net radiation from hot surfaces = net absorption by cold surfaces",
+      "- For two-surface enclosure: Q₁₂ = σ(T₁⁴ - T₂⁴) / (1/ε₁ + 1/ε₂ - 1) × A₁",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours → Temperature",
+        "Results → Reports → Surface Integrals → Radiation Heat Flux",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "- **Energy conservation:** total heat radiated = total heat absorbed in enclosure",
+      "- **Temperature range:** all T values must be > 0 K (absolute)",
+      "- **View factor reciprocity:** A₁F₁₂ = A₂F₂₁ (check if analytical VFs available)",
+      "- **Summation rule:** ΣF_ij = 1 for each surface in enclosure",
+      "- **Black body limit:** if ε = 1 on all surfaces, result should match blackbody exchange",
+      "- Heat flows from hot to cold — net flux direction must be physically correct",
+    ].join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Fluxes"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**View factors not computed (S2S):**",
+      "- Must click 'Compute' in radiation model settings before running",
+      "- Error: 'view factors not available' — recompute after mesh changes",
+      "",
+      "**Temperature in Celsius instead of Kelvin:**",
+      "- Radiation uses T⁴ — MUST use absolute temperature (Kelvin)",
+      "- If using Celsius, set offset correctly in Fluent",
+      "",
+      "**Emissivity = 0 on all surfaces:**",
+      "- No radiation exchange occurs — at least one surface needs ε > 0",
+      "",
+      "**Divergence with DO model:**",
+      "- Reduce under-relaxation for Discrete Ordinates to 0.5",
+      "- Start with fewer angular divisions (2×2) and increase later",
+      "",
+      "**Very slow convergence:**",
+      "- Normal for radiation-dominated problems",
+      "- Ensure initial temperature guess is reasonable (not 0 K!)",
+    ].join("\n"), {
+      tips: [
+        "Always use Kelvin for radiation problems — Fluent handles the offset but double-check",
+        "For S2S: view factor computation is a one-time cost — save the case file after computing",
+      ],
+    }),
+  ];
+}
+
+function templateFinHeatTransfer(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const lower = text.toLowerCase();
+  const isPin = lower.includes("pin fin") || lower.includes("pin") || lower.includes("spine");
+  const isAnnular = lower.includes("annular") || lower.includes("annular fin");
+  const isRectangular = lower.includes("rectangular") || lower.includes("plate fin");
+  const isArray = lower.includes("array") || lower.includes("heat sink") || lower.includes("fin array");
+  const finType = isPin ? "pin fin" : isAnnular ? "annular fin" : isRectangular ? "rectangular fin" : "fin";
+  const radiation = hasRadiation(text);
+
+  return [
+    sec("Problem Summary", `${finType.charAt(0).toUpperCase() + finType.slice(1)} heat transfer — ${isArray ? "fin array / heat sink, " : "single fin, "}${transient ? "transient" : "steady-state"}${radiation ? ", with radiation" : ""}.`),
+
+    sec("Governing Physics", [
+      "Fin/extended surface heat transfer involves:",
+      "- Conduction along the fin from base to tip",
+      "- Convection from fin surface to surrounding fluid",
+      radiation ? "- Radiation from fin surface" : "",
+      "",
+      "**Governing equation (1D fin):**",
+      "- d²T/dx² - (hP)/(kA_c)(T - T∞) = 0 (steady, no radiation)",
+      "- m = √(hP/(kA_c)) — fin parameter",
+      "",
+      "**Key parameters:**",
+      "- Fin efficiency: η_f = Q_actual / Q_max (if entire fin were at base temperature)",
+      "- Fin effectiveness: ε_f = Q_with_fin / Q_without_fin",
+      "- Biot number: Bi = h·(t/2)/k (t = fin thickness) — should be < 0.1 for 1D assumption",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      "- Steady-state" + (transient ? " or transient heat transfer" : ""),
+      "- Uniform convection coefficient h over fin surface (can be refined in CFD)",
+      "- Fin base at constant temperature T_b",
+      "- Tip condition: adiabatic, convective, or prescribed temperature",
+      `- ${isPin ? "Cylindrical cross-section" : isAnnular ? "Annular geometry" : "Rectangular cross-section, width >> thickness"}`,
+      "- Constant thermal conductivity (unless temperature-dependent)",
+      radiation ? "- Surface radiation included (significant for high-T or vacuum applications)" : "- Radiation neglected",
+    ].filter(Boolean).join("\n"), {
+      tips: ["CFD can capture the actual flow field around the fin — no need to assume uniform h"],
+    }),
+
+    sec("Required Inputs", [
+      "- Fin material and thermal conductivity (k)",
+      `- Fin geometry: ${isPin ? "diameter and length" : isAnnular ? "inner radius, outer radius, thickness" : "length, thickness, width"}`,
+      isArray ? "- Number of fins, fin spacing/pitch" : "",
+      "- Base temperature (T_b)",
+      "- Ambient fluid temperature (T∞)",
+      "- Convection coefficient (h) — or let CFD compute it from flow field",
+      "- Fluid properties if solving the flow",
+      "- Tip boundary condition (adiabatic, convective, or temperature)",
+      radiation ? "- Surface emissivity" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Material Properties", [
+      "**Fin (solid) material:**",
+      "- Aluminum (common for heat sinks): k = 202 W/(m·K), ρ = 2719 kg/m³, cₚ = 871 J/(kg·K)",
+      "- Copper: k = 387 W/(m·K), cₚ = 381 J/(kg·K)",
+      "- Steel: k = 50 W/(m·K)",
+      "",
+      "**Surrounding fluid:**",
+      "- Air at ~25°C: ρ = 1.185 kg/m³, μ = 1.849×10⁻⁵ Pa·s, k = 0.0262 W/(m·K), cₚ = 1006 J/(kg·K)",
+      "- Set Boussinesq density if natural convection drives the flow around fins",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Materials → Solid → Create/Edit",
+        "Materials → Fluid → Create/Edit",
+      ],
+    }),
+
+    sec("Geometry Guidance", [
+      "**Two approaches:**",
+      "",
+      "**Approach 1 — Conjugate (flow + fin, recommended for accurate h):**",
+      `- Model the fin geometry: ${isPin ? "cylinder protruding from base plate" : isAnnular ? "annular disc on a tube" : "rectangular plate extending from base"}`,
+      "- Model surrounding fluid domain (extend 5-10× fin length in each direction)",
+      isArray ? "- Model single fin + half-spacing on each side, use symmetry/periodic BCs" : "",
+      "- Shared topology between solid (fin) and fluid domains",
+      "",
+      "**Approach 2 — Solid-only (prescribed h):**",
+      "- Model only the fin geometry (solid)",
+      "- Apply convection BC on all exposed surfaces with specified h and T∞",
+      "- Much simpler but h must be known a priori",
+      "",
+      isArray ? [
+        "**Heat sink array:**",
+        "- Use symmetry: model a single fin channel (half-fin + half-gap)",
+        "- Periodic BCs if fins repeat identically",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "For homework/course problems with given h, Approach 2 (solid-only) is sufficient",
+        "For real-world design, Approach 1 captures the actual flow patterns and local h variations",
+      ],
+    }),
+
+    sec("Meshing Guidance", [
+      "**Fin (solid) meshing:**",
+      `- ${isPin ? "Use sweep mesh along fin length, O-grid cross-section" : "Structured hex/quad mesh preferred"}`,
+      "- At least 5 cells across fin thickness (Bi check: should be < 0.1 for 1D assumption to hold)",
+      "- Finer mesh near base (highest temperature gradient) and tip",
+      "",
+      "**Fluid domain (if conjugate):**",
+      "- Fine mesh near fin surfaces (inflation layers, y+ ≈ 1 for turbulent or 10+ cells in BL for laminar)",
+      "- Growth ratio: 1.1-1.2 from fin surface outward",
+      isArray ? "- Resolve inter-fin channel flow adequately" : "",
+      "",
+      `**Total cells:** ${isArray ? "200,000-2,000,000 for conjugate array" : "20,000-200,000 for single fin conjugate"}, much less for solid-only`,
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Mesh → Check"],
+    }),
+
+    sec("Solver Setup", [
+      "**General:** Pressure-Based, " + (transient ? "Transient" : "Steady"),
+      "",
+      "**Models:**",
+      "- Energy: ON",
+      "- Viscous: Laminar (typical for natural convection around fins) or k-omega SST (for forced-convection cooling)",
+      radiation ? "- Radiation: S2S or DO (if significant)" : "",
+      "",
+      "**Cell Zone Conditions:**",
+      "- Fin body: Solid (assign fin material)",
+      "- Surrounding region: Fluid (assign air/coolant)",
+      "",
+      "**If natural convection:** Enable gravity, use Boussinesq density",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Models → Energy → ON",
+        "Setup → Cell Zone Conditions → [fin zone] → Type: Solid",
+        ...(radiation ? ["Setup → Models → Radiation → S2S"] : []),
+      ],
+    }),
+
+    sec("Boundary Conditions", [
+      "**Fin Base:**",
+      "- Wall → Thermal → Constant Temperature = T_base",
+      "- Or: coupled to a heat source (volumetric generation in base plate)",
+      "",
+      "**Fin Tip:**",
+      "- Adiabatic (most common assumption): heat flux = 0",
+      "- Or convective tip: apply convection BC",
+      "",
+      "**If conjugate (flow modeled):**",
+      "- Inlet: Velocity-Inlet with T∞ and velocity",
+      "- Outlet: Pressure-Outlet",
+      "- Fin surfaces: coupled wall (automatic at solid-fluid interface)",
+      "",
+      "**If solid-only:**",
+      "- All exposed fin surfaces: Convection BC with h and T∞",
+      isArray ? "- Symmetry planes at mid-gap between fins" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Boundary Conditions → Wall → Thermal → Temperature",
+        "Setup → Boundary Conditions → Wall → Thermal → Convection",
+      ],
+    }),
+
+    sec("Solution Methods & Strategy", [
+      "**Scheme:** SIMPLE (solid-only) or Coupled (conjugate with flow)",
+      "**Discretization:** Second Order Upwind for all",
+      "",
+      "**Strategy:**",
+      "1. Initialize with Hybrid method (or set T = T_base throughout fin)",
+      "2. First-order upwind for 200 iterations",
+      "3. Switch to second-order until converged",
+      "",
+      "**Convergence:**",
+      "- Energy residual < 1×10⁻⁶",
+      "- Monitor: total heat dissipation from fin (surface integral of heat flux)",
+      "- Monitor: fin tip temperature",
+      `- Iterations: ${isArray ? "1000-3000 for conjugate" : "100-500 for solid-only, 500-2000 for conjugate"}`,
+    ].join("\n"), {
+      fluentMenuPaths: ["Solution → Methods", "Solution → Run Calculation"],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Temperature distribution along fin (should decrease from base to tip)",
+      "- Local heat flux on fin surface",
+      "- Velocity field around fin (if conjugate)",
+      "",
+      "**XY Plots:**",
+      "- Temperature along fin length (base to tip)",
+      "- Local heat transfer coefficient along fin surface",
+      "",
+      "**Key Results:**",
+      "- Total heat dissipation: Q_fin = ∫h(T - T∞)dA over fin surface",
+      "- Fin efficiency: η = Q_actual / [hA_fin(T_base - T∞)]",
+      "- Fin effectiveness: ε = Q_with_fin / [hA_base(T_base - T∞)]",
+      "- Tip temperature",
+      "",
+      "**Validation:**",
+      `- Compare with analytical: ${isPin ? "T(x)/θ_b = cosh[m(L-x)]/cosh(mL) for adiabatic tip" : "Same hyperbolic solution for rectangular fins"}`,
+      "- Analytical fin efficiency: η = tanh(mL)/(mL) for insulated tip",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours → Temperature",
+        "Results → Reports → Surface Integrals → Total Heat Transfer Rate",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "- **Temperature monotonically decreases** from base to tip (no heating along the fin)",
+      "- **Fin tip temperature** > T∞ (fin must be warmer than ambient)",
+      "- **Fin efficiency** should be between 0 and 1 (η < 1 always)",
+      "- **Effectiveness** should be > 1 (otherwise fin is counterproductive — very unusual)",
+      "- **Energy balance:** heat entering at base = total convective + radiative loss from surfaces",
+      "- **Biot number check:** Bi = h·(t/2)/k should be < 0.1 for 1D fin assumption to be valid",
+    ].join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Fluxes"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**Fin zone not set as Solid:**",
+      "- If Fluent tries to solve flow inside the fin, results will be wrong",
+      "",
+      "**Wrong base temperature:**",
+      "- Ensure the base face (attached to primary surface) has the correct T_base",
+      "",
+      "**Convection coefficient too high or low:**",
+      "- h for natural convection in air: 5-25 W/(m²·K)",
+      "- h for forced convection in air: 25-250 W/(m²·K)",
+      "- If computed η > 1 or < 0, check h value and units",
+      "",
+      "**Mesh too coarse across fin thickness:**",
+      "- Need at least 3-5 cells across thickness for 2D temperature variation",
+      "",
+      isArray ? "**Symmetry BC not applied correctly for fin array:**\n- Ensure zero gradient normal to symmetry plane" : "",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "For quick validation, compare CFD result with analytical solution using the same h value",
+        "Fin efficiency strongly depends on mL = L√(hP/kAc) — compute this first to estimate expected η",
+      ],
+    }),
+  ];
+}
+
+function templatePorousMedia(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const heated = hasHeating(text);
+  const laminar = isLaminar(text);
+  const lower = text.toLowerCase();
+  const isPackedBed = lower.includes("packed bed") || lower.includes("packed column") || lower.includes("pebble");
+  const isFilter = lower.includes("filter") || lower.includes("filtration");
+  const isCatalytic = lower.includes("catalytic") || lower.includes("catalyst");
+  const porousType = isPackedBed ? "packed bed" : isFilter ? "filter" : isCatalytic ? "catalytic converter" : "porous region";
+
+  return [
+    sec("Problem Summary", `Flow through ${porousType} (porous media) — ${laminar ? "laminar" : "turbulent"}, ${heated ? "with heat transfer, " : ""}${transient ? "transient" : "steady-state"}.`),
+
+    sec("Governing Physics", [
+      "Flow through porous media is modeled using the Darcy-Forchheimer equation:",
+      "- Pressure drop: -∂p/∂x = (μ/α)v + C₂(½ρv²)",
+      "  - First term: viscous (Darcy) resistance — dominant at low velocity",
+      "  - Second term: inertial (Forchheimer) resistance — dominant at high velocity",
+      "",
+      "**Key parameters:**",
+      "- Porosity (φ): void fraction (0 to 1)",
+      "- Permeability (α) [m²]: ease of flow through medium",
+      "- Viscous resistance (1/α) [1/m²]: inverse of permeability",
+      "- Inertial resistance (C₂) [1/m]: Forchheimer coefficient",
+      "",
+      isPackedBed ? "**Ergun equation for packed beds:** ΔP/L = 150μ(1-φ)²v/(φ³d²) + 1.75ρ(1-φ)v²/(φ³d)" : "",
+      heated ? "**Thermal equilibrium** assumed between fluid and solid matrix (one-temperature model) unless specified otherwise." : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      "- Porous medium is homogeneous and isotropic (unless directional resistance specified)",
+      "- Local thermal equilibrium between fluid and solid phases" + (heated ? " (or non-equilibrium if specified)" : ""),
+      `- ${laminar ? "Laminar" : "Turbulent"} flow in the clear (non-porous) regions`,
+      "- Incompressible flow through the porous zone",
+      "- Porosity and resistance coefficients are constant",
+      isPackedBed ? "- Spherical particles of uniform diameter (for Ergun correlation)" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Required Inputs", [
+      "- Geometry of the porous region and surrounding flow domain",
+      "- Porosity (φ) of the porous medium",
+      "- Particle diameter (for packed beds) or pore size",
+      "- Viscous resistance coefficient (1/α) [1/m²]",
+      "- Inertial resistance coefficient (C₂) [1/m]",
+      isPackedBed ? "- Or: particle diameter d_p and porosity φ → Fluent can compute from Ergun" : "",
+      "- Inlet flow velocity or flow rate",
+      heated ? "- Inlet temperature, heat source/sink in porous zone" : "",
+      "- Fluid properties (ρ, μ, and thermal properties if heated)",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "From Ergun equation: 1/α = 150(1-φ)²/(φ³d²), C₂ = 3.5(1-φ)/(φ³d) for packed beds",
+        "If you only have ΔP vs. velocity data, fit to ΔP = av + bv² to get viscous and inertial coefficients",
+      ],
+    }),
+
+    sec("Material Properties", [
+      "**Fluid properties:**",
+      "- Standard fluid (water, air, etc.) as required",
+      "",
+      heated ? [
+        "**Porous zone thermal properties:**",
+        "- Solid material of porous matrix (e.g., alumina, steel, ceramic)",
+        "- Effective thermal conductivity: k_eff = φ·k_fluid + (1-φ)·k_solid",
+        "- Or specify separate solid and fluid conductivities in Fluent's porous zone settings",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Materials → Fluid → Create/Edit"],
+    }),
+
+    sec("Geometry Guidance", [
+      "**Do NOT model individual pores or particles.** Instead:",
+      "- Create the porous region as a simple volume (box, cylinder, etc.)",
+      "- Create the surrounding clear-fluid region",
+      "- The porous region is defined via Cell Zone Conditions, not geometry features",
+      "",
+      `**For ${porousType}:**`,
+      isPackedBed ? "- Model as a cylindrical or rectangular volume filled with the 'porous' zone" : "",
+      isFilter ? "- Model as a thin slab (porous zone) within a flow channel" : "",
+      isCatalytic ? "- Model the converter as a cylindrical porous zone with inlet/outlet cones" : "",
+      "",
+      "Ensure separate Named Selections for the porous zone and clear zones.",
+    ].filter(Boolean).join("\n"), {
+      tips: ["The porous zone is a volume — you don't model individual particles/pores, just the bulk resistance"],
+      warnings: ["Do NOT try to mesh individual pores — use the porous media model instead"],
+    }),
+
+    sec("Meshing Guidance", [
+      "**Porous zone:**",
+      "- Moderate mesh density (porous model is a volume-averaged approach)",
+      "- No need for boundary layer refinement inside porous zone",
+      "- Refine at porous-clear fluid interface (pressure gradients)",
+      "",
+      "**Clear (non-porous) regions:**",
+      `- Standard meshing: ${laminar ? "resolve velocity BL" : "y+ ≈ 1 at walls"}`,
+      "- Refine near inlet/outlet of porous zone",
+      "",
+      "**Total cells:** 50,000-500,000 depending on geometry complexity",
+    ].join("\n"), {
+      fluentMenuPaths: ["Mesh → Check"],
+    }),
+
+    sec("Solver Setup", [
+      "**General:** Pressure-Based, " + (transient ? "Transient" : "Steady"),
+      "",
+      "**Models:**",
+      `- Viscous: ${laminar ? "Laminar" : "k-epsilon Realizable (turbulence in clear region)"}`,
+      heated ? "- Energy: ON" : "",
+      "",
+      "**Cell Zone Conditions — Porous Zone:**",
+      "- Select the porous region → Check 'Porous Zone'",
+      "- Set Porosity: φ (e.g., 0.4 for packed beds)",
+      "- Direction 1 Vector: [1,0,0] (or flow direction)",
+      "",
+      "**Viscous Resistance (1/α) [1/m²]:**",
+      isPackedBed ? "- Compute from Ergun: 1/α = 150(1-φ)²/(φ³d_p²)" : "- Input from data or correlations",
+      "",
+      "**Inertial Resistance (C₂) [1/m]:**",
+      isPackedBed ? "- Compute from Ergun: C₂ = 3.5(1-φ)/(φ³d_p)" : "- Input from data or correlations",
+      "",
+      heated ? [
+        "**Thermal settings in porous zone:**",
+        "- Thermal Equilibrium model (default) or Non-Equilibrium",
+        "- Solid material of porous matrix",
+        "- Porosity affects effective conductivity",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Cell Zone Conditions → [zone] → Porous Zone → Enable",
+        "Setup → Cell Zone Conditions → [zone] → Porous Zone → Viscous Resistance",
+        "Setup → Cell Zone Conditions → [zone] → Porous Zone → Inertial Resistance",
+        "Setup → Cell Zone Conditions → [zone] → Porous Zone → Porosity",
+      ],
+      warnings: [
+        "Viscous resistance = 1/α (NOT α). It's the inverse of permeability.",
+        "Units: viscous resistance in 1/m², inertial resistance in 1/m — double-check!",
+      ],
+    }),
+
+    sec("Boundary Conditions", [
+      "**Inlet:**",
+      "- Velocity-Inlet: specify superficial velocity (based on total cross-section, not pore area)",
+      !laminar ? "- Turbulence: Intensity 5%, Hydraulic Diameter" : "",
+      heated ? "- Temperature: T_inlet" : "",
+      "",
+      "**Outlet:**",
+      "- Pressure-Outlet: gauge pressure = 0 Pa",
+      "",
+      "**Walls:**",
+      "- No-slip at channel walls",
+      heated ? "- Adiabatic or specified temperature/heat flux" : "",
+      "",
+      "**Porous zone interfaces:**",
+      "- No explicit BC needed — porous zone is interior to the domain",
+      "- Fluent handles the transition automatically",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Setup → Boundary Conditions"],
+      tips: ["The velocity you specify at the inlet is the superficial (Darcy) velocity, not the interstitial velocity. Interstitial = superficial/porosity"],
+    }),
+
+    sec("Solution Methods", [
+      "**Scheme:** SIMPLE or Coupled (Coupled often better for porous flows due to strong pressure-velocity coupling)",
+      "",
+      "**Spatial Discretization:**",
+      "- Gradient: Least Squares Cell Based",
+      "- Pressure: Second Order (or PRESTO! if gravity effects)",
+      "- Momentum: Second Order Upwind",
+      heated ? "- Energy: Second Order Upwind" : "",
+      !laminar ? "- Turbulence quantities: Second Order Upwind" : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Solution → Methods"],
+    }),
+
+    sec("Initialization & Solution Strategy", [
+      "**Initialize:** Hybrid Initialization",
+      "",
+      "**Strategy:**",
+      "1. Start with first-order upwind",
+      "2. Run 200-500 iterations",
+      "3. Switch to second-order upwind",
+      `4. Total iterations: ${laminar ? "500-1500" : "1000-3000"}`,
+      "",
+      "**Under-Relaxation (if convergence issues):**",
+      "- Pressure: 0.3 → 0.2 (porous media adds strong pressure source)",
+      "- Momentum: 0.7 → 0.5",
+      "",
+      "**Monitors:**",
+      "- Pressure drop across porous zone: ΔP = P_inlet_face - P_outlet_face of porous region",
+      heated ? "- Outlet temperature" : "",
+      "- Mass flow rate at inlet and outlet (should match)",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Solution → Initialization", "Solution → Run Calculation"],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Pressure (should show significant drop through porous zone)",
+      "- Velocity (note: Fluent reports superficial velocity in porous zone by default)",
+      heated ? "- Temperature distribution" : "",
+      "",
+      "**XY Plots:**",
+      "- Pressure along flow direction through porous zone",
+      "- Velocity profile at porous zone inlet and outlet",
+      "",
+      "**Key Results:**",
+      "- Pressure drop: ΔP across porous zone — compare with Ergun or correlation",
+      isPackedBed ? "- Compare ΔP with Ergun equation: ΔP = [150μ(1-φ)²v/(φ³d²) + 1.75ρ(1-φ)v²/(φ³d)] × L" : "",
+      heated ? "- Outlet temperature and heat transfer rate" : "",
+      "- Flow uniformity downstream of porous zone",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours → Pressure",
+        "Results → Plots → XY Plot",
+        "Results → Reports → Surface Integrals",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "- **Pressure drop** should match analytical Darcy or Ergun prediction within ~10-20%",
+      "- **Mass conservation:** inlet mass flow = outlet mass flow",
+      "- **Velocity in porous zone** should be lower than upstream (if area is constant) and follow Darcy's law",
+      heated ? "- **Energy balance:** heat added = ṁ × cₚ × (T_out - T_in)" : "",
+      "- **Pressure drop scales correctly:** linear with v (Darcy) at low Re, quadratic at high Re",
+      "- If ΔP seems too high or low, recheck viscous and inertial resistance coefficients",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Fluxes"],
+      warnings: ["The most common error in porous media simulations is incorrect resistance coefficients — always validate ΔP against correlations"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**Wrong resistance coefficients:**",
+      "- Most frequent error — ΔP will be orders of magnitude off",
+      "- Double-check units: viscous resistance [1/m²], inertial resistance [1/m]",
+      "- Verify against known correlations (Ergun for packed beds)",
+      "",
+      "**Forgot to enable Porous Zone:**",
+      "- The zone acts as clear fluid — no pressure drop observed",
+      "",
+      "**Divergence:**",
+      "- High resistance can cause strong source terms → reduce under-relaxation for pressure/momentum",
+      "- Start with lower velocity and ramp up",
+      "",
+      "**Velocity interpretation:**",
+      "- Fluent reports superficial velocity in porous zone by default",
+      "- Interstitial velocity = superficial velocity / porosity",
+      "- Enable 'Superficial Velocity' option in Cell Zone Conditions if needed",
+      "",
+      heated ? "**Thermal non-equilibrium not accounted for:**\n- Default is thermal equilibrium between solid and fluid phases\n- For fast flows or low-conductivity solids, use non-equilibrium model" : "",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "Start with a 1D validation: single flow direction through porous slab, compare ΔP with hand calculation",
+        "If ΔP is critical, perform a mesh independence study on the porous zone mesh",
+      ],
+    }),
+  ];
+}
+
+function templateBoilingCondensation(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const lower = text.toLowerCase();
+  const isBoiling = lower.includes("boiling") || lower.includes("evaporation") || lower.includes("vaporization");
+  const isCondensation = lower.includes("condensation");
+  const isMelting = lower.includes("melting") || lower.includes("solidification") || lower.includes("freezing");
+  const isPoolBoiling = lower.includes("pool boiling");
+  const isFlowBoiling = lower.includes("flow boiling");
+  const isFilmCondensation = lower.includes("film condensation");
+  const phaseType = isMelting ? "melting/solidification" : isBoiling ? "boiling" : isCondensation ? "condensation" : "phase change";
+
+  return [
+    sec("Problem Summary", `${phaseType.charAt(0).toUpperCase() + phaseType.slice(1)} heat transfer — ${isPoolBoiling ? "pool boiling" : isFlowBoiling ? "flow boiling" : isFilmCondensation ? "film condensation" : phaseType}${transient ? ", transient" : ", steady-state"}.`),
+
+    sec("Governing Physics", [
+      `${phaseType.charAt(0).toUpperCase() + phaseType.slice(1)} involves latent heat exchange during phase transition:`,
+      "",
+      isBoiling ? [
+        "- Nucleate boiling: bubbles form at heated surface (dominant mechanism in most applications)",
+        "- Film boiling: vapor film covers surface (very high wall superheat)",
+        "- Critical Heat Flux (CHF): transition between nucleate and film boiling",
+        "- Boiling curve: q″ vs. ΔT_sat shows different regimes",
+      ].join("\n") : "",
+      isCondensation ? [
+        "- Film condensation: liquid film forms on cooled surface (Nusselt analysis)",
+        "- Dropwise condensation: discrete drops form and shed (5-20× higher h)",
+        "- Condensation rate depends on: surface temperature, vapor velocity, non-condensables",
+      ].join("\n") : "",
+      isMelting ? [
+        "- Stefan problem: moving solid-liquid interface",
+        "- Latent heat absorbed/released at melting temperature",
+        "- Natural convection in melt region can significantly affect melting rate",
+        "- Mushy zone: mixture of solid and liquid phases at melting temperature",
+      ].join("\n") : "",
+      "",
+      "**Key parameters:**",
+      "- Latent heat of vaporization/fusion (L or h_fg)",
+      isBoiling ? "- Wall superheat: ΔT_sat = T_wall - T_sat" : "",
+      isCondensation ? "- Subcooling: ΔT_sub = T_sat - T_wall" : "",
+      isMelting ? "- Stefan number: Ste = cₚΔT/L (ratio of sensible to latent heat)" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      isMelting ? [
+        "- Phase change occurs at a fixed melting temperature T_melt",
+        "- Mushy zone modeled with enthalpy-porosity method (Fluent default)",
+        "- Natural convection in liquid phase may be significant",
+        "- Constant material properties (or temperature-dependent)",
+      ].join("\n") : [
+        "- Two-phase flow: liquid and vapor phases",
+        "- Phase change at saturation temperature T_sat",
+        "- Surface tension effects may be important (especially for boiling)",
+        isPoolBoiling ? "- Stagnant pool with heated surface at bottom/side" : "",
+        isFlowBoiling ? "- Flowing liquid with phase change along heated channel" : "",
+        isFilmCondensation ? "- Gravity-driven film flow on cooled surface" : "",
+      ].filter(Boolean).join("\n"),
+      "",
+      transient ? "- Transient simulation required (phase change is inherently time-dependent for most cases)" : "- Quasi-steady assumption (if applicable)",
+    ].join("\n"), {
+      warnings: [
+        "Phase change simulations are among the most challenging in CFD — expect long run times and convergence difficulties",
+        isMelting ? "Ensure mushy zone constant is appropriate (default 10⁵ in Fluent) — affects melting rate" : "VOF or Mixture model requires careful time-stepping and Courant number control",
+      ].filter(Boolean),
+    }),
+
+    sec("Required Inputs", [
+      "- Saturation temperature (T_sat) or melting temperature (T_melt)",
+      `- Latent heat (h_fg for ${isBoiling || isCondensation ? "vaporization" : "fusion"})`,
+      "- Properties of both phases (liquid and vapor/solid)",
+      `- Wall temperature or heat flux (drives the ${phaseType})`,
+      "- Geometry of the domain",
+      isFlowBoiling ? "- Inlet liquid velocity and subcooling" : "",
+      isPoolBoiling ? "- Pool dimensions and initial liquid level" : "",
+      isFilmCondensation ? "- Vapor conditions (temperature, velocity)" : "",
+      isMelting ? "- Initial and boundary temperatures, Stefan number" : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Material Properties", [
+      isMelting ? [
+        "**Melting/Solidification material:**",
+        "- Use Fluent's Solidification/Melting model material setup",
+        "- Solidus Temperature: T_solidus",
+        "- Liquidus Temperature: T_liquidus (= T_solidus for pure substance)",
+        "- Latent Heat: L [J/kg]",
+        "- Density, specific heat, thermal conductivity for both phases",
+        "",
+        "**Common PCM materials:**",
+        "- Water/Ice: T_melt = 0°C, L = 334 kJ/kg",
+        "- Paraffin wax: T_melt ≈ 50-60°C, L ≈ 200 kJ/kg",
+        "- Gallium: T_melt = 29.8°C, L = 80.2 kJ/kg (common benchmark)",
+      ].join("\n") : [
+        "**Liquid phase properties (at T_sat):**",
+        "- Density, viscosity, specific heat, thermal conductivity, surface tension",
+        "",
+        "**Vapor phase properties (at T_sat):**",
+        "- Density, viscosity, specific heat, thermal conductivity",
+        "",
+        "**Phase change properties:**",
+        "- Latent heat of vaporization: h_fg [J/kg]",
+        "- Saturation temperature: T_sat [K]",
+        "",
+        "**Water at 1 atm:**",
+        "- T_sat = 100°C, h_fg = 2257 kJ/kg",
+        "- ρ_liquid = 958 kg/m³, ρ_vapor = 0.598 kg/m³",
+      ].join("\n"),
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Materials → Fluid → Create/Edit",
+        ...(isMelting ? ["Setup → Models → Solidification & Melting"] : []),
+      ],
+    }),
+
+    sec("Geometry Guidance", [
+      isPoolBoiling ? [
+        "**Pool boiling geometry:**",
+        "- 2D or 3D domain representing the liquid pool",
+        "- Heated surface at bottom (or side)",
+        "- Free surface or pressure outlet at top",
+        "- Domain height: several bubble diameters above heated surface",
+      ].join("\n") : "",
+      isFlowBoiling ? [
+        "**Flow boiling geometry:**",
+        "- Channel or tube with heated walls",
+        "- Sufficient length for vapor quality development",
+        "- Inlet subcooled liquid, heated along channel",
+      ].join("\n") : "",
+      isFilmCondensation ? [
+        "**Film condensation geometry:**",
+        "- Vertical or inclined cooled surface",
+        "- Vapor space on one side",
+        "- Drainage path for condensate film",
+      ].join("\n") : "",
+      isMelting ? [
+        "**Melting/solidification geometry:**",
+        "- Rectangular cavity (common benchmark: gallium melting in a box)",
+        "- Hot wall on one side, cold wall on opposite side",
+        "- Other walls adiabatic",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      tips: ["Start with 2D simulations — phase change in 3D is computationally very expensive"],
+    }),
+
+    sec("Meshing Guidance", [
+      "**Phase change problems require fine meshes:**",
+      "- Near heated/cooled surfaces: very fine mesh (first cell < 0.1 mm)",
+      "- In phase change region: uniform fine mesh to resolve interface",
+      isMelting ? "- In mushy zone: mesh must be fine enough to capture the melt front" : "",
+      isBoiling ? "- Mesh must resolve individual bubbles if using VOF (cell size << bubble diameter)" : "",
+      "",
+      "**Recommended cell sizes:**",
+      isBoiling ? "- Bubble departure diameter ≈ 1-3 mm → need cells of 0.1-0.2 mm" : "",
+      isMelting ? "- Phase front thickness spans several cells" : "",
+      "",
+      `**Total cells:** ${isBoiling ? "100,000-1,000,000+ for 2D" : isMelting ? "10,000-100,000 for 2D" : "50,000-500,000"}`,
+      "",
+      "**Quality:** Orthogonal quality > 0.8, uniform cell sizes near interface",
+    ].filter(Boolean).join("\n"), {
+      warnings: ["Phase change simulations are very mesh-sensitive — always perform mesh independence study"],
+    }),
+
+    sec("Solver & Model Setup", [
+      "**General:** Pressure-Based, Transient (almost always needed for phase change)",
+      "",
+      isMelting ? [
+        "**Solidification/Melting Model:**",
+        "- Enable: Models → Solidification & Melting",
+        "- Mushy Zone Constant: 10⁵ (default, reduce to 10⁴ if convergence issues)",
+        "- Pull Velocity: 0 (unless modeling continuous casting)",
+        "",
+        "- Energy: ON",
+        "- Viscous: Laminar (typical for melting) or k-epsilon if turbulent convection in melt",
+        "- Gravity: ON (for natural convection in melt)",
+      ].join("\n") : [
+        "**Multiphase Model:**",
+        "- VOF (Volume of Fluid) — for tracking sharp liquid-vapor interface",
+        "  - Explicit VOF with Geo-Reconstruct for sharp interfaces",
+        "  - Or Implicit VOF for stability",
+        "",
+        "**Phase Change:**",
+        "- Mass transfer mechanism: Lee model (evaporation-condensation)",
+        "  - Evaporation coefficient: 0.1 s⁻¹ (start value, tune as needed)",
+        "  - Condensation coefficient: 0.1 s⁻¹",
+        "  - Saturation temperature: T_sat",
+        "",
+        "**Other models:**",
+        "- Energy: ON",
+        `- Viscous: ${isPoolBoiling ? "Laminar (low Re) or k-omega SST" : "k-epsilon or k-omega SST"}`,
+        "- Gravity: ON",
+        "- Surface Tension: Enable with appropriate σ value (Continuum Surface Force model)",
+      ].join("\n"),
+    ].join("\n"), {
+      fluentMenuPaths: isMelting ? [
+        "Setup → Models → Solidification & Melting → ON",
+        "Setup → Models → Energy → ON",
+        "Setup → General → Gravity → ON",
+      ] : [
+        "Setup → Models → Multiphase → VOF",
+        "Setup → Models → Energy → ON",
+        "Setup → General → Gravity → ON",
+        "Setup → Phase Interaction → Mass Transfer → Lee Model",
+      ],
+      warnings: isMelting
+        ? ["Mushy zone constant strongly affects melting rate — perform sensitivity study"]
+        : ["Lee model evaporation/condensation coefficients need tuning — start with 0.1 and adjust based on physical behavior"],
+    }),
+
+    sec("Boundary Conditions", [
+      "**Heated/Cooled Wall:**",
+      "- Constant Temperature: T_wall (superheat for boiling, subcooled for condensation)",
+      "- Or Constant Heat Flux: q″ [W/m²]",
+      "",
+      isPoolBoiling ? [
+        "**Top boundary (free surface):**",
+        "- Pressure-Outlet: P = 0 (gauge), Backflow volume fraction: vapor = 1",
+        "",
+        "**Side walls:** Adiabatic, no-slip",
+      ].join("\n") : "",
+      isFlowBoiling ? [
+        "**Inlet:**",
+        "- Velocity-Inlet: liquid velocity, T = T_sub (subcooled)",
+        "- Volume fraction: liquid = 1, vapor = 0",
+        "",
+        "**Outlet:**",
+        "- Pressure-Outlet",
+      ].join("\n") : "",
+      isMelting ? [
+        "**Hot wall:** Constant temperature T_hot > T_melt",
+        "**Cold wall:** Constant temperature T_cold < T_melt (or adiabatic)",
+        "**Other walls:** Adiabatic",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Setup → Boundary Conditions"],
+    }),
+
+    sec("Solution Methods", [
+      "**Pressure-Velocity Coupling:** SIMPLE or PISO (PISO preferred for transient phase change)",
+      "",
+      "**Spatial Discretization:**",
+      "- Pressure: PRESTO! (recommended for multiphase / buoyancy)",
+      "- Momentum: Second Order Upwind",
+      "- Energy: Second Order Upwind",
+      isMelting ? "" : "- Volume Fraction: Geo-Reconstruct (for sharp interface, explicit) or Compressive (implicit)",
+      "",
+      "**Transient Formulation:** First Order Implicit (more stable for phase change)",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Solution → Methods"],
+      tips: ["PRESTO! pressure discretization is critical for phase change problems with gravity"],
+    }),
+
+    sec("Initialization & Solution Strategy", [
+      "**Initialize:**",
+      isMelting ? "- Patch temperature: set initial solid region to T_cold, liquid region (if any) to T_hot" : "- Set domain to liquid phase, at subcooled or saturation temperature",
+      isMelting ? "- Patch liquid fraction = 0 everywhere (all solid initially)" : "- Volume fraction: liquid = 1 everywhere initially",
+      "",
+      "**Time Stepping:**",
+      `- Start with small Δt: ${isMelting ? "0.1-1 s (depending on Stefan number)" : "10⁻⁴ to 10⁻³ s for boiling/condensation"}`,
+      "- Max Iterations per Time Step: 20-30",
+      "- Adaptive time stepping recommended (increase Δt once solution stabilizes)",
+      "",
+      isMelting ? "" : "**Courant Number:** Keep VOF Courant < 0.5 for explicit scheme (Geo-Reconstruct)",
+      "",
+      "**Monitors:**",
+      isMelting ? "- Liquid fraction (area-weighted average or volume integral)" : "- Volume fraction of vapor phase",
+      "- Total heat transfer rate at heated/cooled wall",
+      isMelting ? "- Melt front position over time" : "- Vapor generation rate",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Solution → Initialization",
+        ...(isMelting ? ["Patch → Liquid Fraction"] : ["Patch → Volume Fraction"]),
+        "Solution → Run Calculation",
+      ],
+      warnings: [
+        "Phase change simulations can take thousands of time steps — plan for long run times",
+        "If diverging, reduce time step by factor of 10",
+      ],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Temperature field",
+      isMelting ? "- Liquid fraction (shows melt front position)" : "- Volume fraction (shows liquid-vapor interface)",
+      "- Velocity vectors (show convection patterns)",
+      "",
+      "**Animation:**",
+      "- Create transient animation of phase front evolution",
+      isMelting ? "- Liquid fraction contour vs. time" : "- Bubble formation and departure (for boiling)",
+      "",
+      "**Key Results:**",
+      isMelting ? [
+        "- Melting rate (liquid fraction vs. time curve)",
+        "- Melt front position at various times",
+        "- Nu number on hot wall vs. time/Fo",
+        "- Compare with Gau & Viskanta (1986) for gallium melting benchmark",
+      ].join("\n") : [
+        "- Heat transfer coefficient vs. wall superheat",
+        "- Vapor volume fraction along channel (for flow boiling)",
+        "- Heat flux vs. time",
+        "- Compare with correlations (Rohsenow for nucleate boiling, Nusselt for film condensation)",
+      ].join("\n"),
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours",
+        "Results → Animations → Solution Animation → Create",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "- **Energy conservation:** check heat balance (Reports → Fluxes) — heat in = latent heat + sensible heat change",
+      isMelting ? "- **Liquid fraction** should monotonically increase (melting) or decrease (solidification)" : "- **Vapor fraction** should increase along heated channel (flow boiling)",
+      "- **Temperature at phase front** should be ≈ T_sat (or T_melt)",
+      isMelting ? [
+        "- **Natural convection in melt:** melt front should be curved (not flat) due to buoyancy",
+        "- Compare with analytical Stefan solution for 1D case: s(t) = 2λ√(αt)",
+      ].join("\n") : [
+        "- **Bubble departure diameter** and frequency should be physically reasonable",
+        "- **Condensate film thickness** should match Nusselt theory for film condensation",
+      ].join("\n"),
+      "- **Mass conservation:** total mass of all phases should be constant (for closed systems)",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Fluxes"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**Divergence / instability:**",
+      "- Reduce time step (most common fix)",
+      "- Use PISO scheme instead of SIMPLE",
+      "- Reduce under-relaxation factors",
+      isMelting ? "- Reduce mushy zone constant from 10⁵ to 10⁴" : "- Reduce Lee model coefficient",
+      "",
+      isMelting ? [
+        "**No melting observed:**",
+        "- Ensure Solidification/Melting model is enabled",
+        "- Check T_hot > T_melt",
+        "- Verify latent heat value (J/kg, not kJ/kg)",
+      ].join("\n") : [
+        "**No phase change observed:**",
+        "- Ensure Lee model mass transfer is defined for the correct phase pair",
+        "- Check that wall temperature exceeds T_sat (for boiling) or is below T_sat (for condensation)",
+        "- Verify VOF model has both phases defined correctly",
+      ].join("\n"),
+      "",
+      "**Spurious velocities / currents:**",
+      "- Common in VOF simulations near interface — reduce Courant number",
+      "- Use Implicit Body Force treatment",
+      "",
+      "**Very slow computation:**",
+      "- Phase change problems are inherently expensive — 2D first, then 3D if needed",
+      "- Consider symmetry to reduce domain size",
+    ].join("\n"), {
+      tips: [
+        "Start with a simple 1D or 2D benchmark case to validate your phase change setup before tackling the full problem",
+        "Save case/data files frequently — phase change simulations are prone to divergence after running for hours",
+      ],
+    }),
+  ];
+}
+
+function templateCompressibleFlow(text: string): WorkflowSection[] {
+  const transient = isTransient(text);
+  const lower = text.toLowerCase();
+  const isNozzle = lower.includes("nozzle") || lower.includes("converging") || lower.includes("de laval") || lower.includes("convergent");
+  const isShockTube = lower.includes("shock tube");
+  const isJet = lower.includes("jet") || lower.includes("supersonic jet");
+  const hasShock = lower.includes("shock") || lower.includes("normal shock") || lower.includes("oblique shock");
+  const heated = hasHeating(text);
+  const flowType = isNozzle ? "nozzle flow" : isShockTube ? "shock tube flow" : isJet ? "supersonic jet" : "compressible flow";
+
+  return [
+    sec("Problem Summary", `Compressible ${flowType} — ${hasShock ? "with shock waves, " : ""}${heated ? "with heat transfer, " : ""}${transient ? "transient" : "steady-state"}. Density-based solver recommended for supersonic flows.`),
+
+    sec("Governing Physics", [
+      "Compressible flow governed by:",
+      "- Compressible Navier-Stokes equations (density varies significantly)",
+      "- Energy equation is mandatory (temperature changes from compression/expansion)",
+      "- Equation of state: ideal gas (ρ = P/(RT))",
+      "",
+      "**Key parameters:**",
+      "- Mach number: M = V/a (a = speed of sound = √(γRT))",
+      "- M < 0.3: incompressible, 0.3 < M < 0.8: subsonic, 0.8 < M < 1.2: transonic, M > 1.2: supersonic",
+      "- Ratio of specific heats: γ = cₚ/cᵥ (1.4 for air)",
+      "",
+      isNozzle ? [
+        "**Isentropic nozzle relations:**",
+        "- A/A* = (1/M)[(2/(γ+1))(1 + (γ-1)/2 M²)]^((γ+1)/(2(γ-1)))",
+        "- Critical (throat) conditions at M = 1",
+      ].join("\n") : "",
+      hasShock ? [
+        "**Normal shock relations:**",
+        "- M₂² = [(γ-1)M₁² + 2] / [2γM₁² - (γ-1)]",
+        "- P₂/P₁ = 1 + 2γ/(γ+1)(M₁² - 1)",
+        "- Entropy increases across shock (irreversible)",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n")),
+
+    sec("Assumptions", [
+      "- Compressible flow (Mach > 0.3)",
+      "- Ideal gas equation of state",
+      "- Calorically perfect gas (constant γ, cₚ) unless high-temperature effects needed",
+      "- Adiabatic walls (unless heat transfer specified)",
+      isNozzle ? "- Quasi-1D isentropic flow (for comparison) — CFD captures 2D/3D effects" : "",
+      isShockTube ? "- Initial diaphragm separates high-pressure and low-pressure regions" : "",
+      "- Viscous effects included (boundary layers on walls)",
+    ].filter(Boolean).join("\n")),
+
+    sec("Required Inputs", [
+      "- Gas properties: γ, R (or molecular weight), cₚ, viscosity",
+      "- Total (stagnation) conditions: P₀, T₀ at inlet",
+      "- Exit or back pressure (controls shock location in nozzles)",
+      isNozzle ? "- Nozzle geometry: inlet area, throat area (A*), exit area, area ratio A_exit/A*" : "",
+      isShockTube ? "- Initial conditions: P₄/P₁ (driver/driven pressure ratio), T₁, T₄" : "",
+      isJet ? "- Nozzle exit conditions: P_exit, T_exit, M_exit" : "",
+      "- Domain dimensions",
+    ].filter(Boolean).join("\n")),
+
+    sec("Material Properties", [
+      "**Gas (typically air):**",
+      "- Density: Ideal Gas (MANDATORY for compressible flow)",
+      "- Molecular Weight: 28.966 kg/kmol (for air)",
+      "- Specific Heat: 1006.43 J/(kg·K) (constant for caloricaly perfect gas)",
+      "- γ = cₚ/cᵥ = 1.4 (for air)",
+      "- Thermal Conductivity: 0.0242 W/(m·K)",
+      "- Dynamic Viscosity: 1.789×10⁻⁵ Pa·s (or Sutherland's law for temperature-dependent)",
+      "",
+      "**Viscosity (for high-temperature flows):**",
+      "- Sutherland's law: μ = μ_ref (T/T_ref)^(3/2) (T_ref + S)/(T + S)",
+      "- For air: μ_ref = 1.716×10⁻⁵, T_ref = 273.11 K, S = 110.56 K",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Materials → Fluid → air → Properties → Density → Ideal Gas",
+        "Materials → Fluid → air → Properties → Viscosity → Sutherland",
+      ],
+      warnings: ["Density MUST be set to Ideal Gas (not constant) for compressible flow — this is the most critical setting"],
+    }),
+
+    sec("Geometry Guidance", [
+      isNozzle ? [
+        "**Converging-Diverging Nozzle:**",
+        "- 2D axisymmetric recommended (axis along flow direction)",
+        "- Define nozzle contour: converging section → throat → diverging section",
+        "- Inlet plenum: extend 2-3× inlet diameter upstream",
+        "- Outlet: extend 5-10× exit diameter downstream to capture shock/expansion pattern",
+        "",
+        "**Key dimensions:**",
+        "- Throat radius/height defines A*",
+        "- Area ratio A_exit/A* determines design Mach number",
+      ].join("\n") : "",
+      isShockTube ? [
+        "**Shock Tube:**",
+        "- 1D geometry (long tube, 2D axisymmetric or narrow 2D planar)",
+        "- Driver section (high pressure) + driven section (low pressure)",
+        "- Total length: L_driver + L_driven (typically L_total = 1-10 m)",
+        "- Diaphragm location: interface between the two regions (use patch for IC)",
+      ].join("\n") : "",
+      isJet ? [
+        "**Supersonic Jet:**",
+        "- 2D axisymmetric: nozzle + downstream domain",
+        "- Downstream domain: 20-30× nozzle diameter in length, 10-15× in radius",
+        "- Include nozzle geometry for accurate exit profile",
+      ].join("\n") : "",
+      "",
+      !isNozzle && !isShockTube && !isJet ? [
+        "**General compressible flow domain:**",
+        "- Extend domain sufficiently upstream and downstream of features",
+        "- 2D axisymmetric for bodies of revolution",
+        "- Account for shock stand-off distance if bow shocks expected",
+      ].join("\n") : "",
+    ].filter(Boolean).join("\n"), {
+      tips: ["For axisymmetric nozzles, use 2D axisymmetric to save computation time significantly"],
+    }),
+
+    sec("Meshing Guidance", [
+      "**Compressible flow requires fine mesh where shocks and expansion waves occur:**",
+      "",
+      "**General guidelines:**",
+      "- Structured quad mesh strongly recommended (better shock resolution)",
+      "- Fine mesh in throat region (if nozzle): 50-100 cells across throat",
+      "- Fine mesh where shocks are expected: cell size ≈ 0.5-1% of characteristic length",
+      "- Near walls: y+ ≈ 1 for turbulent BL (k-omega SST), or 15-20 cells across BL for laminar",
+      "",
+      isNozzle ? "**Nozzle mesh:** cluster cells near throat and diverging section where shocks form" : "",
+      isShockTube ? "**Shock tube mesh:** uniform fine mesh (Δx = L/1000 to L/5000) to resolve moving shocks" : "",
+      "",
+      "**Total cells:** 50,000-500,000 for 2D, millions for 3D",
+      "",
+      "**Quality:** Orthogonal quality > 0.8 (critical for density-based solver stability)",
+      "- Minimize cell stretching in flow direction where shocks occur",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Mesh → Check"],
+      warnings: [
+        "Shocks are captured over 2-3 cells — if cells are too coarse, shocks will be smeared",
+        "Density-based solver is sensitive to mesh quality — avoid high skewness",
+      ],
+    }),
+
+    sec("Solver Setup", [
+      "**General:**",
+      "- Solver Type: Density-Based (recommended for supersonic flow)",
+      "  - Or Pressure-Based with coupled solver for mildly compressible flows (M < 2)",
+      `- Time: ${transient ? "Transient" : "Steady"}`,
+      "- 2D Space: Axisymmetric (if applicable)",
+      "",
+      "**Models:**",
+      "- Energy: ON (mandatory for compressible flow)",
+      "- Viscous: k-omega SST (turbulent) or Laminar",
+      "  - For inviscid analysis: Viscous → Inviscid",
+      "",
+      "**Operating Conditions:**",
+      "- Operating Pressure: 0 Pa (use absolute pressures everywhere)",
+      "  - This is crucial for compressible flow — always work with absolute pressures",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Setup → General → Solver → Density-Based",
+        "Setup → Models → Energy → ON",
+        "Setup → General → Operating Conditions → Operating Pressure → 0",
+      ],
+      warnings: [
+        "Set Operating Pressure to 0 Pa for compressible flow — all pressures must be absolute",
+        "Density-Based solver MUST have Energy ON — it cannot run without it for compressible flows",
+      ],
+    }),
+
+    sec("Boundary Conditions", [
+      isNozzle ? [
+        "**Inlet (plenum):**",
+        "- Pressure-Inlet (stagnation conditions)",
+        "- Total Pressure: P₀ [Pa absolute]",
+        "- Total Temperature: T₀ [K]",
+        "- Supersonic/Initial Gauge Pressure: estimate static P from isentropic relations",
+        "",
+        "**Outlet:**",
+        "- Pressure-Outlet",
+        "- Back Pressure: P_back [Pa absolute]",
+        "- If supersonic at outlet: back pressure is not felt (supersonic exit — extrapolated)",
+      ].join("\n") : "",
+      isShockTube ? [
+        "**Left end wall:** Wall (closed end of driver section)",
+        "**Right end wall:** Wall (closed end of driven section)",
+        "- No inlet/outlet BCs needed — this is an initial value problem",
+        "- Use Patch to set initial P and T in each section",
+      ].join("\n") : "",
+      isJet ? [
+        "**Nozzle inlet:**",
+        "- Pressure-Inlet: P₀, T₀",
+        "",
+        "**Far-field / ambient:**",
+        "- Pressure-Far-Field or Pressure-Outlet at ambient conditions",
+        "- Set Mach = 0 and P = P_ambient, T = T_ambient for quiescent surroundings",
+      ].join("\n") : "",
+      !isNozzle && !isShockTube && !isJet ? [
+        "**Inlet:**",
+        "- Pressure-Inlet with total conditions (P₀, T₀)",
+        "- Or Pressure-Far-Field with Mach number, P_static, T_static",
+        "",
+        "**Outlet:**",
+        "- Pressure-Outlet with back pressure",
+      ].join("\n") : "",
+      "",
+      "**Walls:**",
+      "- No-slip (viscous) or slip (inviscid)",
+      heated ? "- Thermal: specified temperature or heat flux" : "- Thermal: Adiabatic (default for compressible flows)",
+      "",
+      "**Axis (if axisymmetric):** Axis boundary",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Setup → Boundary Conditions → Pressure-Inlet",
+        "Setup → Boundary Conditions → Pressure-Outlet",
+      ],
+      tips: [
+        "For nozzles: use Pressure-Inlet (NOT Velocity-Inlet) for compressible flow — stagnation conditions are required",
+        "Back pressure controls the flow regime in nozzles: high P_back = subsonic, low P_back = supersonic with shocks",
+      ],
+    }),
+
+    sec("Solution Methods", [
+      "**Density-Based Solver Settings:**",
+      "- Formulation: Implicit (more stable, recommended) or Explicit (for time-accurate transient)",
+      "- Flux Type: Roe-FDS (robust) or AUSM (good for shocks)",
+      "",
+      "**Spatial Discretization:**",
+      "- Flow: Second Order Upwind (or Third Order MUSCL for better shock resolution)",
+      "- Gradient: Least Squares Cell Based",
+      heated ? "- Energy included in coupled flow equations (density-based)" : "",
+      "",
+      transient ? [
+        "**Transient Settings:**",
+        "- Time Step: Δt based on CFL condition (CFL ≈ 1 for explicit, can be higher for implicit)",
+        "- Δt = CFL × Δx / (|V| + a) where a = speed of sound",
+      ].join("\n") : [
+        "**Courant Number (CFL):**",
+        "- Start with CFL = 1-5 (implicit)",
+        "- Increase gradually to 20-100 as solution stabilizes",
+        "- If diverging, reduce CFL",
+      ].join("\n"),
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Solution → Methods → Formulation → Implicit",
+        "Solution → Methods → Flux Type → Roe-FDS",
+        "Solution → Controls → Courant Number",
+      ],
+    }),
+
+    sec("Initialization & Solution Strategy", [
+      isShockTube ? [
+        "**Shock Tube Initialization:**",
+        "1. Initialize entire domain with driven (low pressure) conditions",
+        "2. Patch driver section with high-pressure conditions:",
+        "   - Patch → Pressure = P₄, Temperature = T₄ in driver region",
+        "3. Run transient simulation",
+      ].join("\n") : [
+        "**Initialization:**",
+        "- Hybrid Initialization, or",
+        "- Standard: set values from inlet conditions",
+        "- For nozzle: initialize with subsonic conditions throughout",
+      ].join("\n"),
+      "",
+      "**Solution Strategy:**",
+      transient ? [
+        "- Start with CFL = 1, run several time steps",
+        "- Monitor shock positions and flow features",
+        isShockTube ? "- Total time: t = L / (2a) to capture full wave system" : "",
+      ].filter(Boolean).join("\n") : [
+        "- Start with CFL = 1-5",
+        "- Run 1000 iterations, check for stability",
+        "- Gradually increase CFL to 20-100",
+        "- Total iterations: 5000-20000 (compressible flows converge slowly)",
+      ].join("\n"),
+      "",
+      "**If diverging:**",
+      "- Reduce CFL to 0.5-1",
+      "- Switch to first-order discretization temporarily",
+      "- Check for negative temperatures or pressures in initial field",
+    ].join("\n"), {
+      fluentMenuPaths: [
+        "Solution → Initialization",
+        ...(isShockTube ? ["Solution → Initialization → Patch"] : []),
+        "Solution → Run Calculation",
+      ],
+    }),
+
+    sec("Post-Processing", [
+      "**Contour Plots:**",
+      "- Mach number (most important for compressible flow)",
+      "- Pressure (absolute)",
+      "- Temperature",
+      "- Density",
+      hasShock ? "- Density gradient magnitude (shows shock locations clearly)" : "",
+      "",
+      "**XY Plots:**",
+      isNozzle ? [
+        "- Mach number along centerline (compare with isentropic area-Mach relation)",
+        "- Static pressure along centerline",
+        "- Static pressure along nozzle wall",
+      ].join("\n") : "",
+      isShockTube ? [
+        "- Pressure, temperature, velocity, density along tube length at various times",
+        "- Compare with exact Riemann solution (Sod's problem)",
+      ].join("\n") : "",
+      isJet ? "- Centerline Mach number decay, jet spreading rate" : "",
+      "",
+      "**Key Results:**",
+      isNozzle ? "- Throat Mach number (should be 1.0 for choked flow)" : "",
+      isNozzle ? "- Exit Mach number and pressure ratio" : "",
+      hasShock ? "- Shock location and strength (P₂/P₁ across shock)" : "",
+      "- Mass flow rate (should match isentropic choked mass flow: ṁ = P₀A*√(γ/(RT₀))×[2/(γ+1)]^((γ+1)/(2(γ-1))))",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: [
+        "Results → Contours → Velocity → Mach Number",
+        "Results → Contours → Density",
+        "Results → Plots → XY Plot",
+      ],
+    }),
+
+    sec("Sanity Checks / Validation", [
+      "- **Mass flow rate** should match isentropic prediction for choked nozzle",
+      "- **Mach 1 at throat** (converging-diverging nozzle, if choked)",
+      "- **Stagnation quantities conserved** across isentropic regions (T₀, P₀ constant along streamlines)",
+      hasShock ? "- **Shock jump conditions** match Rankine-Hugoniot relations" : "",
+      isNozzle ? "- **Pressure ratios** match isentropic tables for given area ratio and exit Mach" : "",
+      isShockTube ? "- **Shock speed, contact discontinuity, expansion fan** match exact Riemann solution" : "",
+      "- **Total temperature** should be constant for adiabatic flows (check across domain)",
+      "- **No negative pressures or temperatures** (indicates numerical issues)",
+    ].filter(Boolean).join("\n"), {
+      fluentMenuPaths: ["Results → Reports → Surface Integrals"],
+      warnings: ["If total temperature is not constant in adiabatic regions, the solution is not grid-converged or has numerical errors"],
+    }),
+
+    sec("Common Errors & Troubleshooting", [
+      "**Operating Pressure not set to 0:**",
+      "- Most common error — causes completely wrong results for compressible flow",
+      "- All pressures must be absolute when Operating Pressure = 0",
+      "",
+      "**Density not set to Ideal Gas:**",
+      "- Compressible flow REQUIRES variable density — constant density gives wrong results",
+      "",
+      "**Divergence / negative pressure:**",
+      "- Reduce CFL (Courant number) to 0.5-1",
+      "- Use first-order discretization initially",
+      "- Check initial conditions — avoid patching M > 1 in wrong regions",
+      "- Ensure boundary pressures are consistent with flow direction",
+      "",
+      "**Shock captured too thick / smeared:**",
+      "- Refine mesh in shock region",
+      "- Use higher-order flux scheme (MUSCL, AUSM+up)",
+      "- Shock will always span 2-3 cells minimum",
+      "",
+      isNozzle ? [
+        "**Wrong flow regime in nozzle:**",
+        "- Check back pressure ratio: P_back/P₀ determines subsonic/supersonic/shock",
+        "- If fully supersonic exit expected, P_back must be low enough",
+        "- Normal shock in diverging section if P_back is between isentropic and subsonic values",
+      ].join("\n") : "",
+      "",
+      "**Energy equation convergence:**",
+      "- Energy is tightly coupled in compressible flow — cannot be disabled",
+      "- If energy residual is high, reduce CFL and ensure consistent initial conditions",
+    ].filter(Boolean).join("\n"), {
+      tips: [
+        "Always validate with a simple case first: e.g., isentropic nozzle flow with known analytical solution",
+        "For shock tubes, Sod's problem (1978) is the standard benchmark — exact solution is well-documented",
+        "Plot Mach number contours first — they immediately show if your solution makes physical sense",
+      ],
+    }),
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Template registry
 // ---------------------------------------------------------------------------
@@ -1520,6 +3351,12 @@ const TEMPLATES: Record<Exclude<ProblemType, "unknown">, (text: string) => Workf
   "heat-exchanger": templateHeatExchanger,
   "lid-driven-cavity": templateLidDrivenCavity,
   "backward-facing-step": templateBackwardFacingStep,
+  "conduction": templateConduction,
+  "radiation": templateRadiation,
+  "fin-heat-transfer": templateFinHeatTransfer,
+  "porous-media": templatePorousMedia,
+  "boiling-condensation": templateBoilingCondensation,
+  "compressible-flow": templateCompressibleFlow,
 };
 
 // ---------------------------------------------------------------------------
@@ -1545,9 +3382,9 @@ export function analyzeWorkflow(text: string, revisionPrompt?: string, originalT
         sec("Unable to Detect Problem Type", [
           "The analyzer could not confidently identify your problem type. Please try:",
           "",
-          "- Including keywords like: pipe flow, external flow, natural convection, heat exchanger, lid-driven cavity, backward-facing step",
-          "- Describing the geometry (pipe, cylinder, plate, enclosure)",
-          "- Mentioning the physics (buoyancy, forced convection, conjugate heat transfer)",
+          "- Including keywords like: pipe flow, external flow, natural convection, heat exchanger, lid-driven cavity, backward-facing step, conduction, radiation, fin, porous, boiling, compressible",
+          "- Describing the geometry (pipe, cylinder, plate, enclosure, nozzle, fin)",
+          "- Mentioning the physics (buoyancy, forced convection, conjugate heat transfer, phase change, supersonic)",
           "",
           "**Supported problem types:**",
           "1. Internal Pipe Flow",
@@ -1558,6 +3395,12 @@ export function analyzeWorkflow(text: string, revisionPrompt?: string, originalT
           "6. Heat Exchanger Analysis",
           "7. Lid-Driven Cavity Flow",
           "8. Backward-Facing Step Flow",
+          "9. Heat Conduction",
+          "10. Radiation Heat Transfer",
+          "11. Fin & Extended Surface Heat Transfer",
+          "12. Porous Media Flow",
+          "13. Boiling & Condensation (Phase Change)",
+          "14. Compressible / Supersonic Flow",
         ].join("\n")),
       ],
     };
@@ -1878,6 +3721,288 @@ function generateClarifications(type: Exclude<ProblemType, "unknown">, text: str
         });
       }
       break;
+
+    case "conduction":
+      if (!hasWord("planar", "cylindrical", "spherical", "wall", "cylinder", "sphere", "slab", "plate")) {
+        q.push({
+          id: "geometry",
+          question: hasImage
+            ? "What is the geometry of the solid body shown in your image?"
+            : "What is the geometry of the solid? (planar wall, cylinder, sphere, etc.)",
+          type: "select",
+          options: ["Planar wall / slab", "Cylindrical (pipe/tube wall)", "Spherical shell", "2D or 3D block", "Other"],
+          required: true,
+        });
+      }
+      if (!hasWord("composite", "multilayer", "multi-layer", "single layer", "homogeneous")) {
+        q.push({
+          id: "layers",
+          question: "Is this a single-material solid or a composite (multi-layer) wall?",
+          type: "select",
+          options: ["Single material", "Composite / multi-layer"],
+          required: true,
+        });
+      }
+      if (!hasWord("aluminum", "steel", "copper", "brick", "insulation", "glass", "concrete", "wood")) {
+        q.push({
+          id: "material",
+          question: "What is the solid material?",
+          hint: "e.g., steel, aluminum, brick, insulation, copper",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("temperature") && !hasNum("heat flux") && !hasWord("convection")) {
+        q.push({
+          id: "boundary_conditions",
+          question: "What are the boundary conditions on the surfaces?",
+          hint: "e.g., T = 100°C on left, convection h = 25 W/(m²·K) on right, adiabatic on top/bottom",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("thickness") && !hasNum("length") && !hasNum("radius") && !hasNum("diameter")) {
+        q.push({
+          id: "dimensions",
+          question: "What are the dimensions of the solid?",
+          hint: "e.g., thickness = 20 cm, or inner radius = 5 cm, outer radius = 10 cm",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "radiation":
+      if (!hasWord("s2s", "surface to surface", "do model", "discrete ordinates", "p1", "participating")) {
+        q.push({
+          id: "rad_model",
+          question: "What type of radiation is involved?",
+          type: "select",
+          options: [
+            "Surface-to-surface (opaque surfaces, transparent medium)",
+            "Participating media (absorbing/emitting gas, e.g., combustion)",
+            "Combined surface + participating media",
+            "Not sure",
+          ],
+          required: true,
+        });
+      }
+      if (!hasWord("enclosure", "furnace", "cavity", "open", "oven")) {
+        q.push({
+          id: "geometry",
+          question: hasImage
+            ? "Is the geometry shown an enclosed space or open surfaces?"
+            : "Is this an enclosed space (furnace, cavity) or open surfaces radiating to surroundings?",
+          type: "select",
+          options: ["Enclosed space (furnace, cavity, oven)", "Open surfaces radiating to surroundings"],
+          required: true,
+        });
+      }
+      if (!hasNum("emissivity") && !hasWord("emissivity", "blackbody", "black body", "gray")) {
+        q.push({
+          id: "emissivity",
+          question: "What are the surface emissivities?",
+          hint: "e.g., ε = 0.8 for oxidized steel, ε = 0.95 for painted surfaces",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("temperature")) {
+        q.push({
+          id: "temperatures",
+          question: "What are the surface temperatures or heat flux conditions?",
+          hint: "e.g., hot wall at 500°C, cold wall at 100°C",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "fin-heat-transfer":
+      if (!hasWord("rectangular", "pin", "annular", "cylindrical", "plate fin", "spine")) {
+        q.push({
+          id: "fin_type",
+          question: hasImage
+            ? "What type of fin is shown in your image?"
+            : "What type of fin is this?",
+          type: "select",
+          options: ["Rectangular / plate fin", "Pin fin (cylindrical)", "Annular fin", "Triangular / tapered fin", "Other"],
+          required: true,
+        });
+      }
+      if (!hasWord("array", "heat sink", "single fin")) {
+        q.push({
+          id: "fin_config",
+          question: "Is this a single fin or a fin array / heat sink?",
+          type: "select",
+          options: ["Single fin", "Fin array / heat sink"],
+          required: true,
+        });
+      }
+      if (!hasNum("length") && !hasNum("height") && !hasWord("fin length")) {
+        q.push({
+          id: "fin_dimensions",
+          question: "What are the fin dimensions?",
+          hint: "e.g., length = 50 mm, thickness = 2 mm, width = 100 mm",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasWord("aluminum", "steel", "copper") && !hasNum("conductivity")) {
+        q.push({
+          id: "fin_material",
+          question: "What is the fin material?",
+          type: "select",
+          options: ["Aluminum", "Copper", "Steel", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("temperature") && !hasNum("base temperature")) {
+        q.push({
+          id: "temperatures",
+          question: "What is the fin base temperature and the ambient temperature?",
+          hint: "e.g., base = 80°C, ambient = 25°C",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("convection") && !hasNum("heat transfer coefficient")) {
+        q.push({
+          id: "htc",
+          question: "Is the convection coefficient (h) given, or should CFD determine it from the flow field?",
+          hint: "e.g., h = 50 W/(m²·K), or 'determine from flow'",
+          type: "text",
+          required: false,
+        });
+      }
+      break;
+
+    case "porous-media":
+      if (!hasWord("packed bed", "filter", "catalytic", "foam", "pebble", "sand")) {
+        q.push({
+          id: "porous_type",
+          question: hasImage
+            ? "What type of porous medium is shown in your image?"
+            : "What type of porous medium is this?",
+          type: "select",
+          options: ["Packed bed (spherical particles)", "Filter / membrane", "Catalytic converter", "Metal foam", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("porosity")) {
+        q.push({
+          id: "porosity",
+          question: "What is the porosity (void fraction) of the porous medium?",
+          hint: "e.g., 0.4 for random packed spheres, 0.9 for metal foam",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("diameter") && !hasNum("particle") && !hasWord("particle diameter")) {
+        q.push({
+          id: "particle_size",
+          question: "What is the particle/pore diameter (if applicable)?",
+          hint: "e.g., 5 mm spheres for packed bed",
+          type: "text",
+          required: false,
+        });
+      }
+      if (!hasNum("velocity") && !hasNum("flow rate")) {
+        q.push({
+          id: "velocity",
+          question: "What is the inlet flow velocity or flow rate?",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "boiling-condensation":
+      if (!hasWord("boiling", "condensation", "melting", "solidification", "evaporation")) {
+        q.push({
+          id: "phase_change_type",
+          question: "What type of phase change is involved?",
+          type: "select",
+          options: ["Boiling (liquid → vapor)", "Condensation (vapor → liquid)", "Melting (solid → liquid)", "Solidification (liquid → solid)"],
+          required: true,
+        });
+      }
+      if (lower.includes("boiling") && !hasWord("pool boiling", "flow boiling", "nucleate", "film boiling")) {
+        q.push({
+          id: "boiling_type",
+          question: "What type of boiling?",
+          type: "select",
+          options: ["Pool boiling (stagnant liquid)", "Flow boiling (liquid flowing in channel)", "Not sure"],
+          required: true,
+        });
+      }
+      if (!hasNum("temperature") && !hasNum("saturation") && !hasWord("saturation temperature")) {
+        q.push({
+          id: "temperatures",
+          question: "What is the saturation (or melting) temperature and the wall temperature?",
+          hint: "e.g., T_sat = 100°C (water at 1 atm), T_wall = 110°C (10°C superheat)",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasWord("water", "refrigerant", "gallium", "paraffin", "pcm")) {
+        q.push({
+          id: "material",
+          question: "What is the working fluid / phase-change material?",
+          type: "select",
+          options: ["Water / steam", "Refrigerant (R-134a, R-410A, etc.)", "Gallium (benchmark)", "Paraffin / PCM", "Other"],
+          required: true,
+        });
+      }
+      break;
+
+    case "compressible-flow":
+      if (!hasWord("nozzle", "shock tube", "jet", "channel", "duct", "airfoil", "wedge")) {
+        q.push({
+          id: "geometry",
+          question: hasImage
+            ? "What type of compressible flow geometry is shown in your image?"
+            : "What is the flow geometry?",
+          type: "select",
+          options: [
+            "Converging-diverging nozzle",
+            "Shock tube",
+            "Supersonic jet",
+            "Flow over a body (wedge, cone, airfoil)",
+            "Channel / duct",
+            "Other",
+          ],
+          required: true,
+        });
+      }
+      if (!hasNum("mach") && !hasNum("velocity") && !hasNum("pressure ratio")) {
+        q.push({
+          id: "mach",
+          question: "What is the expected Mach number range or inlet/exit conditions?",
+          hint: "e.g., Mach 2 at exit, or inlet pressure 500 kPa, back pressure 100 kPa",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasWord("air", "nitrogen", "helium", "co2", "gas")) {
+        q.push({
+          id: "gas",
+          question: "What gas is being used?",
+          type: "select",
+          options: ["Air (γ = 1.4)", "Nitrogen", "Helium (γ = 1.67)", "CO₂", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("pressure") && !hasNum("total pressure") && !hasNum("stagnation")) {
+        q.push({
+          id: "pressures",
+          question: "What are the inlet and outlet pressures?",
+          hint: "e.g., P₀ = 500 kPa (total), P_back = 100 kPa (absolute values!)",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
   }
 
   // If they uploaded an image but gave little text, add an open-ended question
@@ -1918,6 +4043,12 @@ export function preAnalyze(text: string, hasImage: boolean): PreAnalysis {
             "Heat exchanger",
             "Lid-driven cavity",
             "Backward-facing step",
+            "Heat conduction (solid only)",
+            "Radiation heat transfer",
+            "Fin / extended surface heat transfer",
+            "Porous media flow",
+            "Boiling / condensation (phase change)",
+            "Compressible / supersonic flow",
           ],
           required: true,
         },
