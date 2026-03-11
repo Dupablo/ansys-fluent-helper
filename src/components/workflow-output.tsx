@@ -3,13 +3,15 @@
 import { WorkflowOutput as WorkflowOutputType } from "@/lib/types";
 import { SectionCard } from "./section-card";
 import { ExportMenu } from "./export-menu";
+import { VisualizationPanel } from "./visualization-panel";
 import { CheckCircle, AlertCircle } from "lucide-react";
 
 interface WorkflowOutputProps {
   workflow: WorkflowOutputType;
+  problemText?: string;
 }
 
-export function WorkflowOutput({ workflow }: WorkflowOutputProps) {
+export function WorkflowOutput({ workflow, problemText = "" }: WorkflowOutputProps) {
   const confidencePercent = Math.round(workflow.confidence * 100);
   const isHighConfidence = workflow.confidence >= 0.5;
 
@@ -37,6 +39,9 @@ export function WorkflowOutput({ workflow }: WorkflowOutputProps) {
           Low confidence detection. Consider adding more specific keywords to your problem description, or request a revision to adjust the workflow.
         </div>
       )}
+
+      {/* Visualizations */}
+      <VisualizationPanel problemType={workflow.problemType} text={problemText} />
 
       <div className="space-y-2">
         {workflow.sections.map((section, i) => (

@@ -177,7 +177,7 @@ export default function ProjectPage() {
               )}
 
               {/* Workflow output */}
-              <WorkflowOutput workflow={activeVersion.workflow} />
+              <WorkflowOutput workflow={activeVersion.workflow} problemText={project.problemText} />
 
               {/* Revision input */}
               <RevisionInput onRevise={handleRevise} />
