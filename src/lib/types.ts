@@ -33,6 +33,23 @@ export interface WorkflowSection {
   fluentMenuPaths?: string[];
 }
 
+export interface ClarificationQuestion {
+  id: string;
+  question: string;
+  hint?: string;
+  type: "text" | "select";
+  options?: string[];
+  answer?: string;
+  required: boolean;
+}
+
+export interface PreAnalysis {
+  problemType: ProblemType;
+  problemTypeLabel: string;
+  confidence: number;
+  clarifications: ClarificationQuestion[];
+}
+
 export type ProblemType =
   | "pipe-flow"
   | "external-flow"

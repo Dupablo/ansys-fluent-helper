@@ -1,4 +1,4 @@
-import { ProblemType, WorkflowOutput, WorkflowSection } from "./types";
+import { ProblemType, WorkflowOutput, WorkflowSection, ClarificationQuestion, PreAnalysis } from "./types";
 
 // ---------------------------------------------------------------------------
 // Keyword detection — same pattern as task_analyzer.py
@@ -1571,5 +1571,375 @@ export function analyzeWorkflow(text: string, revisionPrompt?: string, originalT
     problemTypeLabel: detection.label,
     confidence: detection.confidence,
     sections,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Pre-analysis: detect type + generate clarifying questions
+// ---------------------------------------------------------------------------
+
+function generateClarifications(type: Exclude<ProblemType, "unknown">, text: string, hasImage: boolean): ClarificationQuestion[] {
+  const q: ClarificationQuestion[] = [];
+  const lower = text.toLowerCase();
+
+  const hasNum = (kw: string) => extractNumber(text, kw, -1) !== -1;
+  const hasWord = (...kws: string[]) => kws.some((k) => lower.includes(k));
+
+  // --- Common questions ---
+
+  if (!hasWord("water", "air", "oil", "mercury", "glycerin", "ethylene glycol", "refrigerant", "steam", "nitrogen")) {
+    q.push({
+      id: "fluid",
+      question: hasImage
+        ? "What working fluid is used in the system shown in your image?"
+        : "What working fluid is being used?",
+      hint: "e.g., water, air, engine oil, ethylene glycol",
+      type: "select",
+      options: ["Water", "Air", "Engine Oil", "Ethylene Glycol", "Other (specify in description)"],
+      required: true,
+    });
+  }
+
+  if (!hasWord("steady", "transient", "unsteady", "time-dependent", "time dependent")) {
+    q.push({
+      id: "time",
+      question: "Is this a steady-state or transient (time-dependent) problem?",
+      type: "select",
+      options: ["Steady-state", "Transient"],
+      required: true,
+    });
+  }
+
+  if (!hasWord("laminar", "turbulent") && !hasNum("reynolds") && !hasNum("re")) {
+    q.push({
+      id: "regime",
+      question: "Is the flow laminar or turbulent? (or provide the Reynolds number)",
+      hint: "If unsure, provide the Reynolds number and we'll determine the regime",
+      type: "select",
+      options: ["Laminar", "Turbulent", "I don't know — determine from Reynolds number"],
+      required: true,
+    });
+  }
+
+  // --- Problem-type-specific questions ---
+
+  switch (type) {
+    case "pipe-flow":
+      if (!hasNum("diameter") && !hasNum("radius") && !hasWord("diameter", "radius", "mm", "cm")) {
+        q.push({
+          id: "diameter",
+          question: hasImage
+            ? "What is the pipe diameter shown in the image?"
+            : "What is the pipe diameter?",
+          hint: "e.g., 25 mm, 0.05 m, 2 inches",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("length") && !hasWord("length")) {
+        q.push({
+          id: "length",
+          question: "What is the pipe length?",
+          hint: "e.g., 2 m, 500 mm",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("velocity") && !hasNum("flow rate") && !hasNum("mass flow")) {
+        q.push({
+          id: "velocity",
+          question: "What is the inlet velocity or flow rate?",
+          hint: "e.g., 1.5 m/s, 0.5 kg/s, 10 L/min",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasWord("heated", "heat", "constant temperature", "heat flux", "adiabatic", "isothermal", "hot", "cold")) {
+        q.push({
+          id: "thermal_bc",
+          question: hasImage
+            ? "Looking at your image — is the pipe wall heated? If so, what boundary condition?"
+            : "Is the pipe heated? If so, is it constant wall temperature or constant heat flux?",
+          type: "select",
+          options: ["Constant wall temperature", "Constant heat flux", "Adiabatic (no heating)"],
+          required: true,
+        });
+      }
+      if (hasWord("heat", "heated", "hot", "temperature") && !hasNum("temperature") && !hasNum("heat flux")) {
+        q.push({
+          id: "thermal_value",
+          question: "What is the wall temperature or heat flux value? Also, what is the inlet temperature?",
+          hint: "e.g., Wall: 80°C, Inlet: 20°C, or Heat flux: 5000 W/m²",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "external-flow":
+      if (!hasWord("cylinder", "sphere", "flat plate", "plate", "airfoil", "body")) {
+        q.push({
+          id: "body_shape",
+          question: hasImage
+            ? "What is the shape of the body shown in your image?"
+            : "What is the shape of the body in the flow? (cylinder, flat plate, sphere, etc.)",
+          type: "select",
+          options: ["Circular cylinder", "Flat plate", "Sphere", "Airfoil", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("diameter") && !hasNum("length") && !hasNum("chord")) {
+        q.push({
+          id: "dimension",
+          question: "What is the characteristic dimension of the body?",
+          hint: "e.g., diameter = 10 mm (for cylinder), length = 0.5 m (for plate)",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("velocity") && !hasNum("freestream")) {
+        q.push({
+          id: "freestream",
+          question: "What is the freestream velocity?",
+          hint: "e.g., 5 m/s, or specify Re instead",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "natural-convection":
+      if (!hasWord("enclosure", "cavity", "vertical plate", "vertical wall", "horizontal")) {
+        q.push({
+          id: "geometry",
+          question: hasImage
+            ? "Based on your image, is this an enclosed cavity or an open-domain (e.g., vertical plate) problem?"
+            : "Is this a closed enclosure or an open-domain problem (e.g., vertical plate)?",
+          type: "select",
+          options: ["Enclosed cavity / enclosure", "Vertical plate (open domain)", "Horizontal plate", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("temperature") && !hasWord("°c", "°k", "kelvin")) {
+        q.push({
+          id: "temperatures",
+          question: "What are the hot and cold wall temperatures?",
+          hint: "e.g., Hot wall: 60°C, Cold wall: 20°C",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("height") && !hasNum("width") && !hasNum("length")) {
+        q.push({
+          id: "dimensions",
+          question: "What are the dimensions of the enclosure or plate?",
+          hint: "e.g., H = 0.5 m, W = 0.5 m",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "forced-convection":
+      if (!hasWord("pipe", "channel", "plate", "duct", "tube", "flat plate")) {
+        q.push({
+          id: "geometry",
+          question: hasImage
+            ? "What type of geometry is shown in your image?"
+            : "What is the flow geometry? (pipe/channel/plate/duct)",
+          type: "select",
+          options: ["Pipe / tube", "Rectangular channel", "Flat plate", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("velocity") && !hasNum("flow rate") && !hasNum("reynolds")) {
+        q.push({
+          id: "velocity",
+          question: "What is the flow velocity or Reynolds number?",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasWord("constant temperature", "heat flux", "constant heat") && !hasNum("temperature")) {
+        q.push({
+          id: "thermal_bc",
+          question: "What is the wall thermal boundary condition?",
+          type: "select",
+          options: ["Constant wall temperature", "Constant heat flux"],
+          required: true,
+        });
+      }
+      break;
+
+    case "conjugate-heat-transfer":
+      if (!hasWord("aluminum", "steel", "copper", "silicon", "pcb", "solid material")) {
+        q.push({
+          id: "solid_material",
+          question: hasImage
+            ? "What is the solid material shown in your image?"
+            : "What is the solid material?",
+          hint: "e.g., aluminum, steel, copper, silicon",
+          type: "select",
+          options: ["Aluminum", "Steel", "Copper", "Silicon", "Other"],
+          required: true,
+        });
+      }
+      if (!hasWord("heat generation", "heat source", "power", "watt")) {
+        q.push({
+          id: "heat_source",
+          question: "Is there volumetric heat generation in the solid? If yes, what is the power?",
+          hint: "e.g., 10 W, 50000 W/m³, or 'heated from external wall'",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "heat-exchanger":
+      if (!hasWord("counter", "parallel", "cross", "shell and tube", "double pipe")) {
+        q.push({
+          id: "hx_type",
+          question: hasImage
+            ? "What type of heat exchanger is shown in your image?"
+            : "What type of heat exchanger is this?",
+          type: "select",
+          options: ["Double-pipe (counter-flow)", "Double-pipe (parallel-flow)", "Shell-and-tube", "Cross-flow", "Other"],
+          required: true,
+        });
+      }
+      if (!hasNum("temperature")) {
+        q.push({
+          id: "temperatures",
+          question: "What are the inlet temperatures of the hot and cold fluids?",
+          hint: "e.g., Hot fluid: 90°C, Cold fluid: 20°C",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("flow rate") && !hasNum("velocity") && !hasNum("mass flow")) {
+        q.push({
+          id: "flow_rates",
+          question: "What are the flow rates for each fluid?",
+          hint: "e.g., Hot: 0.5 kg/s, Cold: 0.8 kg/s",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+
+    case "lid-driven-cavity":
+      if (!hasNum("reynolds") && !hasNum("re") && !hasNum("velocity")) {
+        q.push({
+          id: "reynolds",
+          question: "What Reynolds number (or lid velocity) should be used?",
+          hint: "Common benchmark values: Re = 100, 400, 1000, 3200, 5000, 10000",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("length") && !hasNum("side") && !hasNum("dimension")) {
+        q.push({
+          id: "size",
+          question: "What is the cavity size (side length)?",
+          hint: "e.g., 1 m (common for benchmarks — use ρ and μ to set Re)",
+          type: "text",
+          required: false,
+        });
+      }
+      break;
+
+    case "backward-facing-step":
+      if (!hasNum("step height") && !hasNum("height") && !hasWord("step height")) {
+        q.push({
+          id: "step_height",
+          question: hasImage
+            ? "What is the step height shown in your image?"
+            : "What is the step height (h)?",
+          hint: "e.g., 10 mm, 0.05 m",
+          type: "text",
+          required: true,
+        });
+      }
+      if (!hasNum("expansion") && !hasWord("expansion ratio")) {
+        q.push({
+          id: "expansion_ratio",
+          question: "What is the expansion ratio (H_outlet / H_inlet)?",
+          hint: "Common value: 2 (step height equals inlet height)",
+          type: "text",
+          required: false,
+        });
+      }
+      if (!hasNum("velocity") && !hasNum("reynolds")) {
+        q.push({
+          id: "velocity",
+          question: "What is the inlet velocity or Reynolds number?",
+          type: "text",
+          required: true,
+        });
+      }
+      break;
+  }
+
+  // If they uploaded an image but gave little text, add an open-ended question
+  if (hasImage && text.trim().split(/\s+/).length < 15) {
+    q.push({
+      id: "image_description",
+      question: "Please describe the key features visible in your uploaded image (geometry shape, labeled dimensions, boundary conditions, flow direction, etc.)",
+      hint: "The more detail you provide about what's in the image, the better the workflow will be",
+      type: "text",
+      required: true,
+    });
+  }
+
+  return q;
+}
+
+export function preAnalyze(text: string, hasImage: boolean): PreAnalysis {
+  const detection = detectProblemType(text);
+
+  if (detection.type === "unknown") {
+    return {
+      problemType: "unknown",
+      problemTypeLabel: "Unknown Problem Type",
+      confidence: 0,
+      clarifications: [
+        {
+          id: "problem_type",
+          question: hasImage
+            ? "We couldn't determine the problem type from your description. Looking at your image, what type of CFD problem is this?"
+            : "We couldn't determine the problem type. What kind of CFD problem is this?",
+          type: "select",
+          options: [
+            "Internal pipe/tube flow",
+            "External flow over a body",
+            "Natural (free) convection",
+            "Forced convection heat transfer",
+            "Conjugate heat transfer (solid + fluid)",
+            "Heat exchanger",
+            "Lid-driven cavity",
+            "Backward-facing step",
+          ],
+          required: true,
+        },
+        {
+          id: "description",
+          question: hasImage
+            ? "Please describe the system shown in your image in as much detail as possible."
+            : "Please describe your CFD problem in detail.",
+          hint: "Include geometry, fluid, flow conditions, temperatures, boundary conditions",
+          type: "text",
+          required: true,
+        },
+      ],
+    };
+  }
+
+  const clarifications = generateClarifications(detection.type, text, hasImage);
+
+  return {
+    problemType: detection.type,
+    problemTypeLabel: detection.label,
+    confidence: detection.confidence,
+    clarifications,
   };
 }
