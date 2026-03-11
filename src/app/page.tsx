@@ -48,7 +48,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold">Projects</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              ANSYS Fluent workflow generator for CFD coursework
+              ANSYS Fluent workflow generator for heat transfer &amp; fluid flow coursework
             </p>
           </div>
           <div className="flex gap-2">
