@@ -63,6 +63,10 @@ The project workspace (`src/app/project/[id]/page.tsx`) uses a `Phase` type: `'i
 - **Keyword scoring**: Multi-word keywords get bonus weight. `detectProblemType()` returns best match + confidence (0-1).
 - **Revision system**: Combines original text + revision prompt, re-runs `analyzeWorkflow()`. Specific keyword overrides for "change to turbulent", "add radiation", "make transient", etc.
 
+## Workflow
+
+Commit work to Git and push to GitHub regularly — after completing each meaningful change or logical unit of work. Use clean, descriptive commit messages. Never leave work uncommitted; we should never lose progress.
+
 ## Dependencies
 
 Next 14.2, React 18, lucide-react (icons), Tailwind CSS 3.4. No other runtime dependencies.
